@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IrisLoan V2 — Bug Intelligence Dashboard</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #F0F4F8;
+      color: #1E293B;
+      min-height: 100vh;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .live-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .live-dot.active {
+      background: #27AE60;
+      animation: pulse 2s infinite;
+    }
+
+    .live-dot.inactive {
+      background: #E74C3C;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .kpi-value {
+      font-size: 32px;
+      font-weight: 700;
+      line-height: 1;
+      margin: 6px 0 4px;
+    }
+
+    .kpi-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #64748B;
+    }
+
+    .kpi-sub {
+      font-size: 12px;
+      color: #94A3B8;
+      margin-top: 2px;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1E293B;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .badge-red    { background: #FEE2E2; color: #DC2626; }
+    .badge-orange { background: #FEF3C7; color: #D97706; }
+    .badge-green  { background: #DCFCE7; color: #16A34A; }
+    .badge-blue   { background: #DBEAFE; color: #2563EB; }
+    .badge-purple { background: #EDE9FE; color: #7C3AED; }
+    .badge-gray   { background: #F1F5F9; color: #64748B; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #94A3B8;
+      padding: 0 8px 10px;
+    }
+    td {
+      padding: 9px 8px;
+      font-size: 13px;
+      border-top: 1px solid #F1F5F9;
+      color: #334155;
+      vertical-align: middle;
+    }
+    tr:first-child td { border-top: none; }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: #94A3B8;
+    }
+
+    .empty-state p { font-size: 14px; margin-top: 8px; }
+
+    .stale-banner {
+      background: #FEF9C3;
+      border: 1px solid #FDE68A;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 12px;
+      color: #92400E;
+      margin-bottom: 16px;
+    }
+
+    .progress-bar-bg {
+      background: #F1F5F9;
+      border-radius: 4px;
+      height: 6px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.4s ease;
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+const { useState, useEffect, useRef, useCallback } = React;
+const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } = Recharts;
+
+// ─── helpers ────────────────────────────────────────────────────────────────
+
+function pct(a, b) {
+  if (!b) return 0;
+  return Math.round((a / b) * 100);
+}
+
+function daysColor(d) {
+  if (d > 14) return '#DC2626';
+  if (d > 7)  return '#D97706';
+  return '#16A34A';
+}
+
+function statusBadge(status) {
+  const s = (status || '').toLowerCase();
+  if (s.includes('conclu') || s.includes('done')) return 'badge badge-green';
+  if (s.includes('qa'))      return 'badge badge-blue';
+  if (s.includes('andamento') || s.includes('progress')) return 'badge badge-purple';
+  if (s.includes('fix'))     return 'badge badge-orange';
+  return 'badge badge-gray';
+}
+
+// ─── KPI Card ────────────────────────────────────────────────────────────────
+
+function KpiCard({ label, value, sub, color = '#1E293B', icon }) {
+  return React.createElement('div', { className: 'card', style: { flex: 1, minWidth: 140 } },
+    React.createElement('div', { className: 'kpi-label' }, icon ? `${icon} ${label}` : label),
+    React.createElement('div', { className: 'kpi-value', style: { color } }, value ?? '—'),
+    sub && React.createElement('div', { className: 'kpi-sub' }, sub)
+  );
+}
+
+// ─── Sprint Section ──────────────────────────────────────────────────────────
+
+function SprintSection({ sprint }) {
+  if (!sprint || sprint.total === 0) return null;
+
+  const statuses = [
+    { label: 'Concluído', value: sprint.done,       color: '#27AE60' },
+    { label: 'QA',        value: sprint.qa,         color: '#3B82F6' },
+    { label: 'Em Andamento', value: sprint.inProgress, color: '#8B5CF6' },
+    { label: 'To Fix',    value: sprint.toFix,      color: '#F59E0B' },
+    { label: 'Pendente',  value: sprint.pending,    color: '#94A3B8' },
+  ];
+
+  return React.createElement('div', { className: 'card', style: { marginBottom: 24 } },
+    sprint._stale && React.createElement('div', { className: 'stale-banner' },
+      '⚠️ Dados da sprint desatualizados — execute node scripts/seed.js para sincronizar'
+    ),
+    React.createElement('div', { className: 'section-title' }, '🏃 Sprint Ativa'),
+    React.createElement('div', { style: { display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 20 } },
+      React.createElement(KpiCard, { label: 'Total Issues', value: sprint.total }),
+      React.createElement(KpiCard, { label: 'Concluídas', value: sprint.done, color: '#27AE60',
+        sub: `${pct(sprint.done, sprint.total)}% da sprint` }),
+      React.createElement(KpiCard, { label: 'Bugs na Sprint', value: sprint.bugCount, color: '#DC2626' }),
+      React.createElement(KpiCard, { label: 'Em QA', value: sprint.qa, color: '#3B82F6' }),
+    ),
+    React.createElement('div', { style: { marginBottom: 20 } },
+      React.createElement('div', { className: 'section-title', style: { fontSize: 12, marginBottom: 10 } }, 'Distribuição por Status'),
+      React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+        statuses.map(s =>
+          React.createElement('div', { key: s.label, style: { display: 'flex', alignItems: 'center', gap: 10 } },
+            React.createElement('div', { style: { width: 90, fontSize: 12, color: '#64748B', flexShrink: 0 } }, s.label),
+            React.createElement('div', { className: 'progress-bar-bg', style: { flex: 1 } },
+              React.createElement('div', { className: 'progress-bar-fill',
+                style: { width: `${pct(s.value, sprint.total)}%`, background: s.color } })
+            ),
+            React.createElement('div', { style: { width: 28, fontSize: 12, fontWeight: 600, textAlign: 'right', color: '#334155' } }, s.value)
+          )
+        )
+      )
+    ),
+    sprint.assignees?.length > 0 && React.createElement('div', null,
+      React.createElement('div', { className: 'section-title', style: { fontSize: 12, marginBottom: 10 } }, 'Carga por Desenvolvedor'),
+      React.createElement(ResponsiveContainer, { width: '100%', height: 180 },
+        React.createElement(BarChart, { data: sprint.assignees, margin: { top: 4, right: 8, bottom: 4, left: -20 } },
+          React.createElement(CartesianGrid, { strokeDasharray: '3 3', stroke: '#F1F5F9' }),
+          React.createElement(XAxis, { dataKey: 'name', tick: { fontSize: 12, fill: '#64748B' } }),
+          React.createElement(YAxis, { tick: { fontSize: 11, fill: '#94A3B8' }, allowDecimals: false }),
+          React.createElement(Tooltip, { contentStyle: { fontSize: 12, borderRadius: 8 } }),
+          React.createElement(Bar, { dataKey: 'count', name: 'Issues', radius: [4,4,0,0], fill: '#6366F1' })
+        )
+      )
+    )
+  );
+}
+
+// ─── Bugs Meta ───────────────────────────────────────────────────────────────
+
+function BugsMetaSection({ meta }) {
+  if (!meta) return null;
+  const resRate = pct(meta.resolved, meta.total);
+
+  return React.createElement('div', { style: { display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 24 } },
+    React.createElement(KpiCard, { label: 'Total de Bugs', value: meta.total, icon: '🐛' }),
+    React.createElement(KpiCard, { label: 'Resolvidos',    value: meta.resolved, color: '#27AE60', icon: '✅',
+      sub: `${resRate}% do total` }),
+    React.createElement(KpiCard, { label: 'Em Aberto',     value: meta.open,     color: '#DC2626', icon: '🔴' }),
+    React.createElement(KpiCard, { label: 'Ciclo Médio',   value: meta.avgCycle ? `${meta.avgCycle}d` : '—',
+      color: meta.avgCycle > 7 ? '#D97706' : '#16A34A', icon: '⏱️',
+      sub: 'criação → resolução' }),
+  );
+}
+
+// ─── Recurrence Table ────────────────────────────────────────────────────────
+
+function RecurrenceSection({ recurrence }) {
+  if (!recurrence?.length) return null;
+
+  return React.createElement('div', { className: 'card', style: { marginBottom: 24 } },
+    React.createElement('div', { className: 'section-title' }, '🔁 Bugs Recorrentes por Área'),
+    React.createElement('table', null,
+      React.createElement('thead', null,
+        React.createElement('tr', null,
+          React.createElement('th', null, 'Área'),
+          React.createElement('th', { style: { textAlign: 'center' } }, 'Total'),
+          React.createElement('th', { style: { textAlign: 'center' } }, 'Resolvidos'),
+          React.createElement('th', { style: { textAlign: 'center' } }, 'Abertos'),
+          React.createElement('th', null, 'Taxa Resolução'),
+        )
+      ),
+      React.createElement('tbody', null,
+        recurrence.map(r =>
+          React.createElement('tr', { key: r.area },
+            React.createElement('td', null,
+              React.createElement('span', { style: { fontWeight: 600 } }, r.area)
+            ),
+            React.createElement('td', { style: { textAlign: 'center', fontWeight: 700 } }, r.total),
+            React.createElement('td', { style: { textAlign: 'center', color: '#16A34A', fontWeight: 600 } }, r.resolved),
+            React.createElement('td', { style: { textAlign: 'center', color: '#DC2626', fontWeight: 600 } }, r.open),
+            React.createElement('td', null,
+              React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+                React.createElement('div', { className: 'progress-bar-bg', style: { flex: 1 } },
+                  React.createElement('div', { className: 'progress-bar-fill',
+                    style: { width: `${pct(r.resolved, r.total)}%`,
+                      background: pct(r.resolved, r.total) >= 70 ? '#27AE60' : pct(r.resolved, r.total) >= 40 ? '#F59E0B' : '#DC2626' } })
+                ),
+                React.createElement('span', { style: { fontSize: 11, color: '#64748B', width: 32, textAlign: 'right' } },
+                  `${pct(r.resolved, r.total)}%`)
+              )
+            )
+          )
+        )
+      )
+    )
+  );
+}
+
+// ─── Bug Chart ───────────────────────────────────────────────────────────────
+
+function RecurrenceChart({ recurrence }) {
+  if (!recurrence?.length) return null;
+
+  const data = recurrence.slice(0, 8);
+
+  return React.createElement('div', { className: 'card', style: { marginBottom: 24 } },
+    React.createElement('div', { className: 'section-title' }, '📊 Volume de Bugs por Área'),
+    React.createElement(ResponsiveContainer, { width: '100%', height: 220 },
+      React.createElement(BarChart, { data, layout: 'vertical', margin: { top: 4, right: 24, bottom: 4, left: 80 } },
+        React.createElement(CartesianGrid, { strokeDasharray: '3 3', stroke: '#F1F5F9', horizontal: false }),
+        React.createElement(XAxis, { type: 'number', tick: { fontSize: 11, fill: '#94A3B8' }, allowDecimals: false }),
+        React.createElement(YAxis, { type: 'category', dataKey: 'area', tick: { fontSize: 12, fill: '#64748B' }, width: 80 }),
+        React.createElement(Tooltip, { contentStyle: { fontSize: 12, borderRadius: 8 } }),
+        React.createElement(Bar, { dataKey: 'resolved', name: 'Resolvidos', stackId: 'a', fill: '#27AE60', radius: [0,0,0,0] }),
+        React.createElement(Bar, { dataKey: 'open', name: 'Abertos', stackId: 'a', fill: '#DC2626', radius: [0,4,4,0] }),
+        React.createElement(Legend, { wrapperStyle: { fontSize: 12 } })
+      )
+    )
+  );
+}
+
+// ─── Open Bugs Table ─────────────────────────────────────────────────────────
+
+function OpenBugsSection({ openBugs }) {
+  if (!openBugs?.length) return null;
+
+  return React.createElement('div', { className: 'card', style: { marginBottom: 24 } },
+    React.createElement('div', { className: 'section-title' },
+      '🔴 Bugs em Aberto',
+      React.createElement('span', { style: { fontSize: 12, fontWeight: 400, color: '#94A3B8' } },
+        `(${openBugs.length} mais antigos)`)
+    ),
+    React.createElement('div', { style: { overflowX: 'auto' } },
+      React.createElement('table', null,
+        React.createElement('thead', null,
+          React.createElement('tr', null,
+            React.createElement('th', null, 'Key'),
+            React.createElement('th', null, 'Resumo'),
+            React.createElement('th', null, 'Status'),
+            React.createElement('th', null, 'Responsável'),
+            React.createElement('th', { style: { textAlign: 'center' } }, 'Dias'),
+            React.createElement('th', null, 'Área'),
+          )
+        ),
+        React.createElement('tbody', null,
+          openBugs.map(bug =>
+            React.createElement('tr', { key: bug.key },
+              React.createElement('td', null,
+                React.createElement('code', { style: { fontSize: 11, background: '#F1F5F9', padding: '2px 6px', borderRadius: 4 } }, bug.key)
+              ),
+              React.createElement('td', null,
+                React.createElement('span', { style: { fontSize: 12 } }, bug.summary),
+                bug.recurrent && React.createElement('span', { style: { marginLeft: 6, fontSize: 10, color: '#D97706', fontWeight: 600 } }, '↩ recorrente')
+              ),
+              React.createElement('td', null,
+                React.createElement('span', { className: statusBadge(bug.status) }, bug.status || '—')
+              ),
+              React.createElement('td', { style: { fontSize: 12, color: '#64748B' } }, bug.assignee),
+              React.createElement('td', { style: { textAlign: 'center' } },
+                React.createElement('span', { style: { fontWeight: 700, color: daysColor(bug.days) } }, bug.days)
+              ),
+              React.createElement('td', null,
+                React.createElement('span', { className: 'badge badge-gray', style: { fontSize: 10 } }, bug.area)
+              )
+            )
+          )
+        )
+      )
+    )
+  );
+}
+
+// ─── Empty State ─────────────────────────────────────────────────────────────
+
+function EmptyState() {
+  return React.createElement('div', { className: 'empty-state' },
+    React.createElement('div', { style: { fontSize: 48 } }, '📭'),
+    React.createElement('p', { style: { fontWeight: 600, color: '#475569' } }, 'Aguardando dados do Jira'),
+    React.createElement('p', null, 'Execute ', React.createElement('code', null, 'node scripts/seed.js'), ' para popular o dashboard'),
+    React.createElement('p', { style: { marginTop: 8, fontSize: 12 } }, 'Após o seed, novas issues serão atualizadas via webhook automaticamente.')
+  );
+}
+
+// ─── App ─────────────────────────────────────────────────────────────────────
+
+function App() {
+  const [data, setData] = useState(null);
+  const [status, setStatus] = useState({ live: false, text: 'Conectando...' });
+  const [errors, setErrors] = useState(0);
+  const pollRef = useRef(null);
+  const errorsRef = useRef(0);
+
+  const fetchMetrics = useCallback(async () => {
+    try {
+      const res = await fetch('/api/metrics');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const json = await res.json();
+
+      errorsRef.current = 0;
+      setErrors(0);
+
+      if (json.lastUpdated) {
+        setData(json);
+        const t = new Date(json.lastUpdated).toLocaleTimeString('pt-BR');
+        setStatus({ live: true, text: 'Última atualização: ' + t });
+      } else {
+        setStatus({ live: true, text: 'Aguardando dados do Jira...' });
+      }
+    } catch (err) {
+      errorsRef.current++;
+      setErrors(errorsRef.current);
+      setStatus({ live: false, text: 'Sem conexão com o servidor' });
+
+      // Exponential backoff up to 5 minutes after 3 consecutive errors
+      if (errorsRef.current >= 3) {
+        clearInterval(pollRef.current);
+        const delay = Math.min(300000, 30000 * errorsRef.current);
+        pollRef.current = setInterval(fetchMetrics, delay);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMetrics();
+    pollRef.current = setInterval(fetchMetrics, 30000);
+    return () => clearInterval(pollRef.current);
+  }, [fetchMetrics]);
+
+  const hasData = data?.bugsMeta?.total > 0 || data?.sprint?.total > 0;
+
+  return React.createElement('div', { style: { maxWidth: 1100, margin: '0 auto', padding: '0 20px 40px' } },
+
+    // Header
+    React.createElement('div', {
+      style: {
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '20px 0 24px'
+      }
+    },
+      React.createElement('div', null,
+        React.createElement('h1', { style: { fontSize: 22, fontWeight: 800, color: '#0F172A' } },
+          'IrisLoan V2 — Bug Intelligence'),
+        React.createElement('p', { style: { fontSize: 13, color: '#64748B', marginTop: 2 } },
+          'Monitoramento de bugs e sprint em tempo real')
+      ),
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#64748B' } },
+        React.createElement('span', {
+          className: `live-dot ${status.live ? 'active' : 'inactive'}`
+        }),
+        React.createElement('span', null, status.text)
+      )
+    ),
+
+    // Content
+    !hasData
+      ? React.createElement(EmptyState)
+      : React.createElement('div', null,
+          data?.sprint && React.createElement(SprintSection, { sprint: data.sprint }),
+          React.createElement(BugsMetaSection, { meta: data?.bugsMeta }),
+          data?.recurrence?.length > 0 && React.createElement('div', {
+            style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }
+          },
+            React.createElement(RecurrenceSection, { recurrence: data.recurrence }),
+            React.createElement(RecurrenceChart, { recurrence: data.recurrence })
+          ),
+          React.createElement(OpenBugsSection, { openBugs: data?.openBugs })
+        )
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>
