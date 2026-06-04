@@ -188,15 +188,28 @@ function SprintSection({ sprint }) {
 
 // ─── Bugs Meta ────────────────────────────────────────────────────────────────
 
-function BugsMetaSection({ meta }) {
+function BugsMetaSection({ meta, sprintBugCount, sprintTotal }) {
   if (!meta) return null;
   const resRate = pct(meta.resolved, meta.total);
-  return e('div', { style: { display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 24 } },
-    e(KpiCard, { label: 'Total de Bugs', value: meta.total, icon: '🐛' }),
-    e(KpiCard, { label: 'Resolvidos', value: meta.resolved, color: '#27AE60', icon: '✅', sub: `${resRate}% do total` }),
-    e(KpiCard, { label: 'Em Aberto', value: meta.open, color: '#DC2626', icon: '🔴' }),
-    e(KpiCard, { label: 'Ciclo Médio', value: meta.avgCycle ? `${meta.avgCycle}d` : '—',
-      color: meta.avgCycle > 7 ? '#D97706' : '#16A34A', icon: '⏱️', sub: 'criação → resolução' }),
+  return e('div', { style: { marginBottom: 24 } },
+    e('div', { className: 'card', style: { marginBottom: 12 } },
+      e('div', { className: 'section-title', style: { marginBottom: 12 } }, '🐛 Bugs — Sprint Atual'),
+      e('div', { style: { display: 'flex', gap: 16, flexWrap: 'wrap' } },
+        e(KpiCard, { label: 'Bugs na Sprint', value: sprintBugCount ?? '—', color: '#DC2626' }),
+        e(KpiCard, { label: '% da Sprint', value: sprintBugCount != null ? `${pct(sprintBugCount, sprintTotal)}%` : '—',
+          color: '#D97706', sub: 'das issues são bugs' }),
+      )
+    ),
+    e('div', { className: 'card' },
+      e('div', { className: 'section-title', style: { marginBottom: 12 } }, '📦 Bugs — Histórico Total'),
+      e('div', { style: { display: 'flex', gap: 16, flexWrap: 'wrap' } },
+        e(KpiCard, { label: 'Total Histórico', value: meta.total, icon: '🐛' }),
+        e(KpiCard, { label: 'Resolvidos', value: meta.resolved, color: '#27AE60', icon: '✅', sub: `${resRate}% do total` }),
+        e(KpiCard, { label: 'Em Aberto', value: meta.open, color: '#DC2626', icon: '🔴' }),
+        e(KpiCard, { label: 'Ciclo Médio', value: meta.avgCycle ? `${meta.avgCycle}d` : '—',
+          color: meta.avgCycle > 7 ? '#D97706' : '#16A34A', icon: '⏱️', sub: 'criação → resolução' }),
+      )
+    )
   );
 }
 
@@ -429,7 +442,7 @@ function App() {
       ? e(EmptyState)
       : e('div', null,
           data?.sprint && e(SprintSection, { sprint: data.sprint }),
-          e(BugsMetaSection, { meta: data?.bugsMeta }),
+          e(BugsMetaSection, { meta: data?.bugsMeta, sprintBugCount: data?.sprint?.bugCount, sprintTotal: data?.sprint?.total }),
           data?.recurrence?.length > 0 && e('div', {
             style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }
           },
