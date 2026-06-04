@@ -271,6 +271,48 @@ function RecurrenceChart({ recurrence }) {
   );
 }
 
+// ─── Cycle Metrics ────────────────────────────────────────────────────────────
+
+function CycleMetricsSection({ cycleMetrics }) {
+  const steps = cycleMetrics?.steps;
+  if (!steps?.length) return null;
+
+  const max = steps[0].avgDays;
+
+  function stepColor(days) {
+    if (days > 7)  return '#DC2626';
+    if (days > 3)  return '#D97706';
+    return '#27AE60';
+  }
+
+  return e('div', { className: 'card', style: { marginBottom: 24 } },
+    e('div', { className: 'section-title' },
+      '⏳ Tempo Médio por Etapa',
+      e('span', { style: { fontSize: 12, fontWeight: 400, color: '#94A3B8' } }, '— sprint atual')
+    ),
+    e('div', { className: 'bar-chart', style: { marginBottom: 16 } },
+      steps.map((s, i) =>
+        e('div', { key: s.status, className: 'bar-row' },
+          e('div', { className: 'bar-label', style: { width: 140 } },
+            s.status,
+            i === 0 && e('span', { style: { marginLeft: 6, fontSize: 10, background: '#FEE2E2', color: '#DC2626',
+              padding: '1px 6px', borderRadius: 99, fontWeight: 700 } }, '⚠ gargalo')
+          ),
+          e('div', { className: 'bar-track' },
+            e('div', { className: 'bar-seg', style: { width: `${pct(s.avgDays, max)}%`, background: stepColor(s.avgDays) } })
+          ),
+          e('div', { style: { fontSize: 12, fontWeight: 700, color: stepColor(s.avgDays), width: 48, textAlign: 'right', flexShrink: 0 } },
+            `${s.avgDays}d`
+          )
+        )
+      )
+    ),
+    e('div', { style: { fontSize: 11, color: '#94A3B8' } },
+      `Baseado no histórico de transições de ${steps.reduce((a, s) => a + s.count, 0)} movimentações na sprint atual`
+    )
+  );
+}
+
 // ─── All Open Issues Table ────────────────────────────────────────────────────
 
 function OpenIssuesSection({ openIssues }) {
@@ -439,6 +481,7 @@ function App() {
             e(RecurrenceSection, { recurrence: data.recurrence }),
             e(RecurrenceChart, { recurrence: data.recurrence })
           ),
+          e(CycleMetricsSection, { cycleMetrics: data?.cycleMetrics }),
           e(OpenIssuesSection, { openIssues: data?.openIssues }),
           e(OpenBugsSection, { openBugs: data?.openBugs })
         )

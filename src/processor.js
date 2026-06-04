@@ -164,6 +164,48 @@ function processWebhookEvent(event, currentMetrics) {
   };
 }
 
+// Calcula tempo médio gasto em cada status com base no changelog das issues
+function buildCycleMetrics(issues) {
+  const statusTimes = {};
+
+  for (const issue of issues) {
+    const fields = issue.fields || issue;
+    const histories = issue.changelog?.histories || [];
+
+    const transitions = [];
+    for (const h of histories) {
+      for (const item of (h.items || [])) {
+        if (item.field === 'status') {
+          transitions.push({ date: new Date(h.created), from: item.fromString, to: item.toString });
+        }
+      }
+    }
+    transitions.sort((a, b) => a.date - b.date);
+
+    let prevDate = new Date(fields.created || Date.now());
+    for (const t of transitions) {
+      const days = (t.date - prevDate) / 86400000;
+      if (t.from && days >= 0) {
+        if (!statusTimes[t.from]) statusTimes[t.from] = [];
+        statusTimes[t.from].push(days);
+      }
+      prevDate = t.date;
+    }
+  }
+
+  const IGNORED = ['backlog', 'to do', 'open', 'concluído', 'done', 'closed'];
+  const steps = Object.entries(statusTimes)
+    .map(([status, times]) => ({
+      status,
+      avgDays: Math.round((times.reduce((a, b) => a + b, 0) / times.length) * 10) / 10,
+      count: times.length,
+    }))
+    .filter(s => s.avgDays > 0 && s.count >= 1 && !IGNORED.some(i => s.status.toLowerCase().includes(i)))
+    .sort((a, b) => b.avgDays - a.avgDays);
+
+  return { steps };
+}
+
 // Retorna todas as issues não-concluídas da sprint para exibição na tabela completa
 function buildOpenIssues(issues) {
   const today = new Date();
@@ -186,4 +228,4 @@ function buildOpenIssues(issues) {
     });
 }
 
-module.exports = { buildSprintMetrics, buildBugMetrics, buildOpenIssues, processWebhookEvent, detectArea };
+module.exports = { buildSprintMetrics, buildBugMetrics, buildOpenIssues, buildCycleMetrics, processWebhookEvent, detectArea };

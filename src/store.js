@@ -11,6 +11,7 @@ const DEFAULT_METRICS = {
   recurrence: [],
   openBugs: [],
   openIssues: [],
+  cycleMetrics: { steps: [] },
   allBugs: []
 };
 
