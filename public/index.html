@@ -251,7 +251,7 @@ function RecurrenceChart({ recurrence }) {
   const maxTotal = Math.max(...data.map(r => r.total));
 
   return e('div', { className: 'card', style: { marginBottom: 24 } },
-    e('div', { className: 'section-title' }, '📊 Volume de Bugs por Área'),
+    e('div', { className: 'section-title' }, '📊 Volume de Bugs por Área do App'),
     e('div', { className: 'bar-chart' },
       data.map(r =>
         e('div', { key: r.area, className: 'bar-row' },
