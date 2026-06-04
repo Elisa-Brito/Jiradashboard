@@ -100,6 +100,65 @@ window.addEventListener('load', function() {
 const { useState, useEffect, useRef, useCallback } = React;
 const e = React.createElement;
 
+// ─── Translations ─────────────────────────────────────────────────────────────
+
+const TRANSLATIONS = {
+  pt: {
+    subtitle: 'Monitoramento de bugs e sprint em tempo real',
+    connecting: 'Conectando...', noConnection: 'Sem conexão com o servidor',
+    lastUpdated: 'Última atualização: ', waitingData: 'Aguardando dados do Jira...',
+    syncing: '⏳ Atualizando...', syncBtn: '🔄 Sincronizar Jira',
+    sprintTitle: '🏃 Sprint Ativa', totalIssues: 'Total Issues',
+    completed: 'Concluídas', ofSprint: '% da sprint', sprintBugs: 'Bugs na Sprint',
+    ofIssues: '% das issues', inQA: 'Em QA', statusDist: 'Distribuição por Status',
+    done: 'Concluído', inProgress: 'Em Andamento', pending: 'Pendente',
+    workload: 'Carga Atual por Desenvolvedor (issues em aberto)',
+    stale: '⚠️ Dados da sprint desatualizados — clique em Sincronizar Jira',
+    bugsHistory: '📦 Bugs — Histórico Total', totalHistoric: 'Total Histórico',
+    resolved: 'Resolvidos', ofTotal: '% do total', open: 'Em Aberto',
+    avgCycle: 'Ciclo Médio', cycleNote: 'criação → resolução',
+    recurrenceTitle: '🔁 Bugs Recorrentes por Área', area: 'Área',
+    resolutionRate: 'Taxa Resolução', chartTitle: '📊 Volume de Bugs por Área do App',
+    openIssuesTitle: '📋 Todas as Issues em Aberto', issues: 'issues',
+    summary: 'Resumo', type: 'Tipo', assignee: 'Responsável', days: 'Dias',
+    openBugsTitle: '🔴 Bugs em Aberto', oldest: 'mais antigos',
+    cycleTitle: '⏳ Tempo Médio por Etapa', currentSprint: '— sprint atual',
+    bottleneck: '⚠ gargalo', cycleNote2: 'movimentações na sprint atual',
+    emptyTitle: 'Aguardando dados do Jira',
+    emptyDesc: 'Execute node scripts/seed.js para popular o dashboard',
+    emptyNote: 'Após o seed, novas issues serão atualizadas automaticamente.',
+    returned: 'voltou',
+  },
+  en: {
+    subtitle: 'Real-time bug and sprint monitoring',
+    connecting: 'Connecting...', noConnection: 'No server connection',
+    lastUpdated: 'Last updated: ', waitingData: 'Waiting for Jira data...',
+    syncing: '⏳ Updating...', syncBtn: '🔄 Sync Jira',
+    sprintTitle: '🏃 Active Sprint', totalIssues: 'Total Issues',
+    completed: 'Completed', ofSprint: '% of sprint', sprintBugs: 'Sprint Bugs',
+    ofIssues: '% of issues', inQA: 'In QA', statusDist: 'Status Distribution',
+    done: 'Done', inProgress: 'In Progress', pending: 'Pending',
+    workload: 'Current Developer Workload (open issues)',
+    stale: '⚠️ Sprint data outdated — click Sync Jira',
+    bugsHistory: '📦 Bugs — Full History', totalHistoric: 'Total Historic',
+    resolved: 'Resolved', ofTotal: '% of total', open: 'Open',
+    avgCycle: 'Avg Cycle', cycleNote: 'creation → resolution',
+    recurrenceTitle: '🔁 Recurring Bugs by Area', area: 'Area',
+    resolutionRate: 'Resolution Rate', chartTitle: '📊 Bug Volume by App Area',
+    openIssuesTitle: '📋 All Open Issues', issues: 'issues',
+    summary: 'Summary', type: 'Type', assignee: 'Assignee', days: 'Days',
+    openBugsTitle: '🔴 Open Bugs', oldest: 'oldest',
+    cycleTitle: '⏳ Average Time per Stage', currentSprint: '— current sprint',
+    bottleneck: '⚠ bottleneck', cycleNote2: 'transitions in the current sprint',
+    emptyTitle: 'Waiting for Jira data',
+    emptyDesc: 'Run node scripts/seed.js to populate the dashboard',
+    emptyNote: 'After seeding, new issues will update automatically.',
+    returned: 'returned',
+  }
+};
+
+let T = TRANSLATIONS.pt;
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function pct(a, b) { return b ? Math.round((a / b) * 100) : 0; }
@@ -135,28 +194,26 @@ function SprintSection({ sprint }) {
   if (!sprint || sprint.total === 0) return null;
 
   const statuses = [
-    { label: 'Concluído',    value: sprint.done,       color: '#27AE60' },
-    { label: 'QA',           value: sprint.qa,         color: '#3B82F6' },
-    { label: 'Em Andamento', value: sprint.inProgress, color: '#8B5CF6' },
-    { label: 'To Fix',       value: sprint.toFix,      color: '#F59E0B' },
-    { label: 'Pendente',     value: sprint.pending,    color: '#94A3B8' },
+    { label: T.done,       value: sprint.done,       color: '#27AE60' },
+    { label: 'QA',         value: sprint.qa,         color: '#3B82F6' },
+    { label: T.inProgress, value: sprint.inProgress, color: '#8B5CF6' },
+    { label: 'To Fix',     value: sprint.toFix,      color: '#F59E0B' },
+    { label: T.pending,    value: sprint.pending,    color: '#94A3B8' },
   ];
 
   const maxAssignee = sprint.assignees?.length ? Math.max(...sprint.assignees.map(a => a.count)) : 1;
 
   return e('div', { className: 'card', style: { marginBottom: 24 } },
-    sprint._stale && e('div', { className: 'stale-banner' },
-      '⚠️ Dados da sprint desatualizados — execute node scripts/seed.js para sincronizar'
-    ),
-    e('div', { className: 'section-title' }, '🏃 Sprint Ativa'),
+    sprint._stale && e('div', { className: 'stale-banner' }, T.stale),
+    e('div', { className: 'section-title' }, T.sprintTitle),
     e('div', { style: { display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 20 } },
-      e(KpiCard, { label: 'Total Issues', value: sprint.total }),
-      e(KpiCard, { label: 'Concluídas', value: sprint.done, color: '#27AE60', sub: `${pct(sprint.done, sprint.total)}% da sprint` }),
-      e(KpiCard, { label: 'Bugs na Sprint', value: sprint.bugCount, color: '#DC2626', sub: `${pct(sprint.bugCount, sprint.total)}% das issues` }),
-      e(KpiCard, { label: 'Em QA', value: sprint.qa, color: '#3B82F6' }),
+      e(KpiCard, { label: T.totalIssues, value: sprint.total }),
+      e(KpiCard, { label: T.completed, value: sprint.done, color: '#27AE60', sub: `${pct(sprint.done, sprint.total)}% ${T.ofSprint}` }),
+      e(KpiCard, { label: T.sprintBugs, value: sprint.bugCount, color: '#DC2626', sub: `${pct(sprint.bugCount, sprint.total)}% ${T.ofIssues}` }),
+      e(KpiCard, { label: T.inQA, value: sprint.qa, color: '#3B82F6' }),
     ),
     e('div', { style: { marginBottom: 20 } },
-      e('div', { className: 'section-title', style: { fontSize: 12, marginBottom: 10 } }, 'Distribuição por Status'),
+      e('div', { className: 'section-title', style: { fontSize: 12, marginBottom: 10 } }, T.statusDist),
       e('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
         statuses.map(s =>
           e('div', { key: s.label, style: { display: 'flex', alignItems: 'center', gap: 10 } },
@@ -170,7 +227,7 @@ function SprintSection({ sprint }) {
       )
     ),
     sprint.assignees?.length > 0 && e('div', null,
-      e('div', { className: 'section-title', style: { fontSize: 12, marginBottom: 10 } }, 'Carga Atual por Desenvolvedor (issues em aberto)'),
+      e('div', { className: 'section-title', style: { fontSize: 12, marginBottom: 10 } }, T.workload),
       e('div', { className: 'bar-chart' },
         sprint.assignees.map(a =>
           e('div', { key: a.name, className: 'bar-row' },
@@ -192,13 +249,13 @@ function BugsMetaSection({ meta }) {
   if (!meta) return null;
   const resRate = pct(meta.resolved, meta.total);
   return e('div', { className: 'card', style: { marginBottom: 24 } },
-    e('div', { className: 'section-title', style: { marginBottom: 12 } }, '📦 Bugs — Histórico Total'),
+    e('div', { className: 'section-title', style: { marginBottom: 12 } }, T.bugsHistory),
     e('div', { style: { display: 'flex', gap: 16, flexWrap: 'wrap' } },
-      e(KpiCard, { label: 'Total Histórico', value: meta.total, icon: '🐛' }),
-      e(KpiCard, { label: 'Resolvidos', value: meta.resolved, color: '#27AE60', icon: '✅', sub: `${resRate}% do total` }),
-      e(KpiCard, { label: 'Em Aberto', value: meta.open, color: '#DC2626', icon: '🔴' }),
-      e(KpiCard, { label: 'Ciclo Médio', value: meta.avgCycle ? `${meta.avgCycle}d` : '—',
-        color: meta.avgCycle > 7 ? '#D97706' : '#16A34A', icon: '⏱️', sub: 'criação → resolução' }),
+      e(KpiCard, { label: T.totalHistoric, value: meta.total, icon: '🐛' }),
+      e(KpiCard, { label: T.resolved, value: meta.resolved, color: '#27AE60', icon: '✅', sub: `${resRate}% ${T.ofTotal}` }),
+      e(KpiCard, { label: T.open, value: meta.open, color: '#DC2626', icon: '🔴' }),
+      e(KpiCard, { label: T.avgCycle, value: meta.avgCycle ? `${meta.avgCycle}d` : '—',
+        color: meta.avgCycle > 7 ? '#D97706' : '#16A34A', icon: '⏱️', sub: T.cycleNote }),
     )
   );
 }
@@ -208,15 +265,15 @@ function BugsMetaSection({ meta }) {
 function RecurrenceSection({ recurrence }) {
   if (!recurrence?.length) return null;
   return e('div', { className: 'card', style: { marginBottom: 24 } },
-    e('div', { className: 'section-title' }, '🔁 Bugs Recorrentes por Área'),
+    e('div', { className: 'section-title' }, T.recurrenceTitle),
     e('table', null,
       e('thead', null,
         e('tr', null,
-          e('th', null, 'Área'),
+          e('th', null, T.area),
           e('th', { style: { textAlign: 'center' } }, 'Total'),
-          e('th', { style: { textAlign: 'center' } }, 'Resolvidos'),
-          e('th', { style: { textAlign: 'center' } }, 'Abertos'),
-          e('th', null, 'Taxa Resolução'),
+          e('th', { style: { textAlign: 'center' } }, T.resolved),
+          e('th', { style: { textAlign: 'center' } }, T.open),
+          e('th', null, T.resolutionRate),
         )
       ),
       e('tbody', null,
@@ -251,7 +308,7 @@ function RecurrenceChart({ recurrence }) {
   const maxTotal = Math.max(...data.map(r => r.total));
 
   return e('div', { className: 'card', style: { marginBottom: 24 } },
-    e('div', { className: 'section-title' }, '📊 Volume de Bugs por Área do App'),
+    e('div', { className: 'section-title' }, T.chartTitle),
     e('div', { className: 'bar-chart' },
       data.map(r =>
         e('div', { key: r.area, className: 'bar-row' },
@@ -265,8 +322,8 @@ function RecurrenceChart({ recurrence }) {
       )
     ),
     e('div', { className: 'chart-legend' },
-      e('div', { className: 'legend-item' }, e('div', { className: 'legend-dot', style: { background: '#27AE60' } }), 'Resolvidos'),
-      e('div', { className: 'legend-item' }, e('div', { className: 'legend-dot', style: { background: '#DC2626' } }), 'Abertos'),
+      e('div', { className: 'legend-item' }, e('div', { className: 'legend-dot', style: { background: '#27AE60' } }), T.resolved),
+      e('div', { className: 'legend-item' }, e('div', { className: 'legend-dot', style: { background: '#DC2626' } }), T.open),
     )
   );
 }
@@ -287,8 +344,8 @@ function CycleMetricsSection({ cycleMetrics }) {
 
   return e('div', { className: 'card', style: { marginBottom: 24 } },
     e('div', { className: 'section-title' },
-      '⏳ Tempo Médio por Etapa',
-      e('span', { style: { fontSize: 12, fontWeight: 400, color: '#94A3B8' } }, '— sprint atual')
+      T.cycleTitle,
+      e('span', { style: { fontSize: 12, fontWeight: 400, color: '#94A3B8' } }, T.currentSprint)
     ),
     e('div', { className: 'bar-chart', style: { marginBottom: 16 } },
       steps.map((s, i) =>
@@ -296,7 +353,7 @@ function CycleMetricsSection({ cycleMetrics }) {
           e('div', { className: 'bar-label', style: { width: 140 } },
             s.status,
             i === 0 && e('span', { style: { marginLeft: 6, fontSize: 10, background: '#FEE2E2', color: '#DC2626',
-              padding: '1px 6px', borderRadius: 99, fontWeight: 700 } }, '⚠ gargalo')
+              padding: '1px 6px', borderRadius: 99, fontWeight: 700 } }, T.bottleneck)
           ),
           e('div', { className: 'bar-track' },
             e('div', { className: 'bar-seg', style: { width: `${pct(s.avgDays, max)}%`, background: stepColor(s.avgDays) } })
@@ -308,7 +365,7 @@ function CycleMetricsSection({ cycleMetrics }) {
       )
     ),
     e('div', { style: { fontSize: 11, color: '#94A3B8' } },
-      `Baseado no histórico de transições de ${steps.reduce((a, s) => a + s.count, 0)} movimentações na sprint atual`
+      `${steps.reduce((a, s) => a + s.count, 0)} ${T.cycleNote2}`
     )
   );
 }
@@ -328,19 +385,19 @@ function OpenIssuesSection({ openIssues }) {
 
   return e('div', { className: 'card', style: { marginBottom: 24 } },
     e('div', { className: 'section-title' },
-      '📋 Todas as Issues em Aberto',
-      e('span', { style: { fontSize: 12, fontWeight: 400, color: '#94A3B8' } }, `(${openIssues.length} issues)`)
+      T.openIssuesTitle,
+      e('span', { style: { fontSize: 12, fontWeight: 400, color: '#94A3B8' } }, `(${openIssues.length} ${T.issues})`)
     ),
     e('div', { style: { overflowX: 'auto' } },
       e('table', null,
         e('thead', null,
           e('tr', null,
             e('th', null, 'Key'),
-            e('th', null, 'Resumo'),
-            e('th', null, 'Tipo'),
+            e('th', null, T.summary),
+            e('th', null, T.type),
             e('th', null, 'Status'),
-            e('th', null, 'Responsável'),
-            e('th', { style: { textAlign: 'center' } }, 'Dias'),
+            e('th', null, T.assignee),
+            e('th', { style: { textAlign: 'center' } }, T.days),
           )
         ),
         e('tbody', null,
@@ -370,19 +427,19 @@ function OpenBugsSection({ openBugs }) {
   if (!openBugs?.length) return null;
   return e('div', { className: 'card', style: { marginBottom: 24 } },
     e('div', { className: 'section-title' },
-      '🔴 Bugs em Aberto',
-      e('span', { style: { fontSize: 12, fontWeight: 400, color: '#94A3B8' } }, `(${openBugs.length} mais antigos)`)
+      T.openBugsTitle,
+      e('span', { style: { fontSize: 12, fontWeight: 400, color: '#94A3B8' } }, `(${openBugs.length} ${T.oldest})`)
     ),
     e('div', { style: { overflowX: 'auto' } },
       e('table', null,
         e('thead', null,
           e('tr', null,
             e('th', null, 'Key'),
-            e('th', null, 'Resumo'),
+            e('th', null, T.summary),
             e('th', null, 'Status'),
-            e('th', null, 'Responsável'),
-            e('th', { style: { textAlign: 'center' } }, 'Dias'),
-            e('th', null, 'Área'),
+            e('th', null, T.assignee),
+            e('th', { style: { textAlign: 'center' } }, T.days),
+            e('th', null, T.area),
           )
         ),
         e('tbody', null,
@@ -395,7 +452,7 @@ function OpenBugsSection({ openBugs }) {
                 e('span', { style: { fontSize: 12 } }, bug.summary),
                 bug.recurrent && e('span', { style: { marginLeft: 6, fontSize: 10, background: '#FEF3C7', color: '#D97706',
                   padding: '1px 6px', borderRadius: 99, fontWeight: 700 } },
-                  `↩ voltou ${bug.toFixCount}x`)
+                  `↩ ${T.returned} ${bug.toFixCount}x`)
               ),
               e('td', null, e('span', { className: statusBadge(bug.status) }, bug.status || '—')),
               e('td', { style: { fontSize: 12, color: '#64748B' } }, bug.assignee),
@@ -416,9 +473,9 @@ function OpenBugsSection({ openBugs }) {
 function EmptyState() {
   return e('div', { className: 'empty-state' },
     e('div', { style: { fontSize: 48 } }, '📭'),
-    e('p', { style: { fontWeight: 600, color: '#475569' } }, 'Aguardando dados do Jira'),
-    e('p', null, 'Execute ', e('code', null, 'node scripts/seed.js'), ' para popular o dashboard'),
-    e('p', { style: { marginTop: 8, fontSize: 12 } }, 'Após o seed, novas issues serão atualizadas via webhook automaticamente.')
+    e('p', { style: { fontWeight: 600, color: '#475569' } }, T.emptyTitle),
+    e('p', null, T.emptyDesc),
+    e('p', { style: { marginTop: 8, fontSize: 12 } }, T.emptyNote)
   );
 }
 
@@ -426,10 +483,12 @@ function EmptyState() {
 
 function App() {
   const [data, setData] = useState(null);
-  const [status, setStatus] = useState({ live: false, text: 'Conectando...' });
+  const [lang, setLang] = useState('pt');
+  const [status, setStatus] = useState({ live: false, text: TRANSLATIONS.pt.connecting });
   const [refreshing, setRefreshing] = useState(false);
   const pollRef = useRef(null);
   const errorsRef = useRef(0);
+  T = TRANSLATIONS[lang];
 
   const fetchMetrics = useCallback(async () => {
     try {
@@ -439,14 +498,14 @@ function App() {
       errorsRef.current = 0;
       if (json.lastUpdated) {
         setData(json);
-        const t = new Date(json.lastUpdated).toLocaleTimeString('pt-BR');
-        setStatus({ live: true, text: 'Última atualização: ' + t });
+        const t = new Date(json.lastUpdated).toLocaleTimeString(lang === 'pt' ? 'pt-BR' : 'en-US');
+        setStatus({ live: true, text: T.lastUpdated + t });
       } else {
-        setStatus({ live: true, text: 'Aguardando dados do Jira...' });
+        setStatus({ live: true, text: T.waitingData });
       }
     } catch {
       errorsRef.current++;
-      setStatus({ live: false, text: 'Sem conexão com o servidor' });
+      setStatus({ live: false, text: T.noConnection });
       if (errorsRef.current >= 3) {
         clearInterval(pollRef.current);
         pollRef.current = setInterval(fetchMetrics, Math.min(300000, 30000 * errorsRef.current));
@@ -466,7 +525,7 @@ function App() {
     e('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 0 24px' } },
       e('div', null,
         e('h1', { style: { fontSize: 22, fontWeight: 800, color: '#0F172A' } }, 'IrisLoan Project Dashboard'),
-        e('p', { style: { fontSize: 13, color: '#64748B', marginTop: 2 } }, 'Monitoramento de bugs e sprint em tempo real')
+        e('p', { style: { fontSize: 13, color: '#64748B', marginTop: 2 } }, T.subtitle)
       ),
       e('div', { style: { display: 'flex', alignItems: 'center', gap: 12 } },
         e('div', { style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#64748B' } },
@@ -489,7 +548,15 @@ function App() {
             border: '1px solid #E2E8F0', background: refreshing ? '#F1F5F9' : '#fff',
             color: refreshing ? '#94A3B8' : '#334155', transition: 'all 0.15s'
           }
-        }, refreshing ? '⏳ Atualizando...' : '🔄 Sincronizar Jira')
+        }, refreshing ? T.syncing : T.syncBtn),
+        e('button', {
+          onClick: () => setLang(l => l === 'pt' ? 'en' : 'pt'),
+          style: {
+            padding: '6px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8,
+            border: '1px solid #E2E8F0', background: '#F8FAFC', color: '#334155',
+            cursor: 'pointer', letterSpacing: '0.05em'
+          }
+        }, lang === 'pt' ? '🇧🇷 PT' : '🇺🇸 EN')
       )
     ),
     !hasData
