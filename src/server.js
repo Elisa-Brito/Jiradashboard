@@ -25,6 +25,16 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+app.post('/api/refresh', async (req, res) => {
+  try {
+    await runSeed();
+    const metrics = store.read();
+    res.json({ ok: true, lastUpdated: metrics.lastUpdated });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });

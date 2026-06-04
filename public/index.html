@@ -427,6 +427,7 @@ function EmptyState() {
 function App() {
   const [data, setData] = useState(null);
   const [status, setStatus] = useState({ live: false, text: 'Conectando...' });
+  const [refreshing, setRefreshing] = useState(false);
   const pollRef = useRef(null);
   const errorsRef = useRef(0);
 
@@ -467,9 +468,28 @@ function App() {
         e('h1', { style: { fontSize: 22, fontWeight: 800, color: '#0F172A' } }, 'IrisLoan Project Dashboard'),
         e('p', { style: { fontSize: 13, color: '#64748B', marginTop: 2 } }, 'Monitoramento de bugs e sprint em tempo real')
       ),
-      e('div', { style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#64748B' } },
-        e('span', { className: `live-dot ${status.live ? 'active' : 'inactive'}` }),
-        e('span', null, status.text)
+      e('div', { style: { display: 'flex', alignItems: 'center', gap: 12 } },
+        e('div', { style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#64748B' } },
+          e('span', { className: `live-dot ${status.live ? 'active' : 'inactive'}` }),
+          e('span', null, status.text)
+        ),
+        e('button', {
+          onClick: async () => {
+            setRefreshing(true);
+            try {
+              await fetch('/api/refresh', { method: 'POST' });
+              await fetchMetrics();
+            } finally {
+              setRefreshing(false);
+            }
+          },
+          disabled: refreshing,
+          style: {
+            padding: '6px 14px', fontSize: 12, fontWeight: 600, borderRadius: 8, cursor: refreshing ? 'not-allowed' : 'pointer',
+            border: '1px solid #E2E8F0', background: refreshing ? '#F1F5F9' : '#fff',
+            color: refreshing ? '#94A3B8' : '#334155', transition: 'all 0.15s'
+          }
+        }, refreshing ? '⏳ Atualizando...' : '🔄 Sincronizar Jira')
       )
     ),
     !hasData
