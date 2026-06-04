@@ -268,6 +268,57 @@ function RecurrenceChart({ recurrence }) {
   );
 }
 
+// ─── All Open Issues Table ────────────────────────────────────────────────────
+
+function OpenIssuesSection({ openIssues }) {
+  if (!openIssues?.length) return null;
+
+  function typeBadge(type) {
+    const t = (type || '').toLowerCase();
+    if (t === 'bug')   return 'badge badge-red';
+    if (t === 'story') return 'badge badge-blue';
+    if (t === 'epic')  return 'badge badge-purple';
+    return 'badge badge-gray';
+  }
+
+  return e('div', { className: 'card', style: { marginBottom: 24 } },
+    e('div', { className: 'section-title' },
+      '📋 Todas as Issues em Aberto',
+      e('span', { style: { fontSize: 12, fontWeight: 400, color: '#94A3B8' } }, `(${openIssues.length} issues)`)
+    ),
+    e('div', { style: { overflowX: 'auto' } },
+      e('table', null,
+        e('thead', null,
+          e('tr', null,
+            e('th', null, 'Key'),
+            e('th', null, 'Resumo'),
+            e('th', null, 'Tipo'),
+            e('th', null, 'Status'),
+            e('th', null, 'Responsável'),
+            e('th', { style: { textAlign: 'center' } }, 'Dias'),
+          )
+        ),
+        e('tbody', null,
+          openIssues.map(issue =>
+            e('tr', { key: issue.key },
+              e('td', null,
+                e('code', { style: { fontSize: 11, background: '#F1F5F9', padding: '2px 6px', borderRadius: 4 } }, issue.key)
+              ),
+              e('td', null, e('span', { style: { fontSize: 12 } }, issue.summary)),
+              e('td', null, e('span', { className: typeBadge(issue.type) }, issue.type)),
+              e('td', null, e('span', { className: statusBadge(issue.status) }, issue.status || '—')),
+              e('td', { style: { fontSize: 12, color: '#64748B' } }, issue.assignee),
+              e('td', { style: { textAlign: 'center' } },
+                e('span', { style: { fontWeight: 700, color: daysColor(issue.days) } }, issue.days)
+              )
+            )
+          )
+        )
+      )
+    )
+  );
+}
+
 // ─── Open Bugs Table ──────────────────────────────────────────────────────────
 
 function OpenBugsSection({ openBugs }) {
@@ -385,6 +436,7 @@ function App() {
             e(RecurrenceSection, { recurrence: data.recurrence }),
             e(RecurrenceChart, { recurrence: data.recurrence })
           ),
+          e(OpenIssuesSection, { openIssues: data?.openIssues }),
           e(OpenBugsSection, { openBugs: data?.openBugs })
         )
   );

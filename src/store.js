@@ -10,6 +10,7 @@ const DEFAULT_METRICS = {
   bugsMeta: { total: 0, resolved: 0, open: 0, avgCycle: 0 },
   recurrence: [],
   openBugs: [],
+  openIssues: [],
   allBugs: []
 };
 

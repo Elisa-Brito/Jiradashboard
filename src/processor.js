@@ -164,4 +164,26 @@ function processWebhookEvent(event, currentMetrics) {
   };
 }
 
-module.exports = { buildSprintMetrics, buildBugMetrics, processWebhookEvent, detectArea };
+// Retorna todas as issues não-concluídas da sprint para exibição na tabela completa
+function buildOpenIssues(issues) {
+  const today = new Date();
+  return issues
+    .filter(issue => {
+      const fields = issue.fields || issue;
+      const statusCat = (fields.status?.statusCategory?.key || '').toLowerCase();
+      return statusCat !== 'done';
+    })
+    .map(issue => {
+      const fields = issue.fields || issue;
+      return {
+        key: issue.key,
+        summary: (fields.summary || '').slice(0, 70),
+        status: fields.status?.name || '',
+        type: fields.issuetype?.name || 'Task',
+        assignee: fields.assignee?.displayName || 'Unassigned',
+        days: fields.created ? Math.round((today - new Date(fields.created)) / 86400000) : 0,
+      };
+    });
+}
+
+module.exports = { buildSprintMetrics, buildBugMetrics, buildOpenIssues, processWebhookEvent, detectArea };
