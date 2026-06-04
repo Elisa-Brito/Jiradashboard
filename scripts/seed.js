@@ -15,7 +15,7 @@ async function jiraRequest(jql, fields) {
   }
 
   const token = Buffer.from(`${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`).toString('base64');
-  const url = `${BASE_URL}/search?jql=${encodeURIComponent(jql)}&fields=${fields}&maxResults=100`;
+  const url = `${BASE_URL}/search/jql?jql=${encodeURIComponent(jql)}&fields=${fields}&maxResults=100`;
 
   return new Promise((resolve, reject) => {
     const req = https.get(url, {
