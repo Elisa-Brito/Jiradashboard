@@ -1,6 +1,6 @@
 const https = require('https');
 const store = require('./store');
-const { buildSprintMetrics, buildBugMetrics, buildOpenIssues, buildCycleMetrics } = require('./processor');
+const { buildSprintMetrics, buildBugMetrics, buildOpenIssues, buildCycleMetrics, buildSprintOpenBugs } = require('./processor');
 
 const CLOUD_ID = '8727a4ee-ae24-46f3-9330-a06732d0b2dd';
 const BASE_URL = `https://api.atlassian.com/ex/jira/${CLOUD_ID}/rest/api/3`;
@@ -40,14 +40,15 @@ async function runSeed() {
 
   const [sprintData, sprintChangelog, bugData] = await Promise.all([
     jiraRequest('project = "IrisLoan - V2" AND sprint in openSprints() ORDER BY created ASC', 'summary,status,issuetype,assignee,created'),
-    jiraRequest('project = "IrisLoan - V2" AND sprint in openSprints()', 'summary,status,created', null, 'changelog'),
+    jiraRequest('project = "IrisLoan - V2" AND sprint in openSprints()', 'summary,status,issuetype,created,assignee', null, 'changelog'),
     jiraRequest('project = "IrisLoan - V2" AND issuetype = Bug ORDER BY created ASC', 'summary,status,created,resolutiondate,assignee'),
   ]);
 
   const sprint = buildSprintMetrics(sprintData.issues || []);
-  const { bugsMeta, recurrence, openBugs } = buildBugMetrics(bugData.issues || []);
+  const { bugsMeta, recurrence } = buildBugMetrics(bugData.issues || []);
   const openIssues = buildOpenIssues(sprintData.issues || []);
   const cycleMetrics = buildCycleMetrics(sprintChangelog.issues || []);
+  const openBugs = buildSprintOpenBugs(sprintChangelog.issues || []);
 
   const metrics = {
     lastUpdated: new Date().toISOString(),

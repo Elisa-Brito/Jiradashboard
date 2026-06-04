@@ -393,7 +393,9 @@ function OpenBugsSection({ openBugs }) {
               ),
               e('td', null,
                 e('span', { style: { fontSize: 12 } }, bug.summary),
-                bug.recurrent && e('span', { style: { marginLeft: 6, fontSize: 10, color: '#D97706', fontWeight: 600 } }, '↩ recorrente')
+                bug.recurrent && e('span', { style: { marginLeft: 6, fontSize: 10, background: '#FEF3C7', color: '#D97706',
+                  padding: '1px 6px', borderRadius: 99, fontWeight: 700 } },
+                  `↩ voltou ${bug.toFixCount}x`)
               ),
               e('td', null, e('span', { className: statusBadge(bug.status) }, bug.status || '—')),
               e('td', { style: { fontSize: 12, color: '#64748B' } }, bug.assignee),

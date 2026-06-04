@@ -164,6 +164,47 @@ function processWebhookEvent(event, currentMetrics) {
   };
 }
 
+// Bugs abertos na sprint atual com detecção de retorno ao To Fix via changelog
+function buildSprintOpenBugs(issues) {
+  const today = new Date();
+
+  return issues
+    .filter(issue => {
+      const fields = issue.fields || issue;
+      const type = (fields.issuetype?.name || '').toLowerCase();
+      const statusCat = (fields.status?.statusCategory?.key || '').toLowerCase();
+      return type === 'bug' && statusCat !== 'done';
+    })
+    .map(issue => {
+      const fields = issue.fields || issue;
+      const histories = issue.changelog?.histories || [];
+
+      // Conta quantas vezes voltou para "To Fix"
+      let toFixCount = 0;
+      for (const h of histories) {
+        for (const item of (h.items || [])) {
+          if (item.field === 'status' && (item.toString || '').toLowerCase().includes('fix')) {
+            toFixCount++;
+          }
+        }
+      }
+
+      const area = detectArea(fields.summary || '');
+      return {
+        key: issue.key,
+        summary: (fields.summary || '').slice(0, 65),
+        status: fields.status?.name || '',
+        assignee: fields.assignee?.displayName || 'Unassigned',
+        days: fields.created ? Math.round((today - new Date(fields.created)) / 86400000) : 0,
+        area,
+        toFixCount,
+        recurrent: toFixCount >= 1,
+      };
+    })
+    .sort((a, b) => b.days - a.days)
+    .slice(0, 15);
+}
+
 // Calcula tempo médio gasto em cada status com base no changelog das issues
 function buildCycleMetrics(issues) {
   const statusTimes = {};
@@ -228,4 +269,4 @@ function buildOpenIssues(issues) {
     });
 }
 
-module.exports = { buildSprintMetrics, buildBugMetrics, buildOpenIssues, buildCycleMetrics, processWebhookEvent, detectArea };
+module.exports = { buildSprintMetrics, buildBugMetrics, buildOpenIssues, buildSprintOpenBugs, buildCycleMetrics, processWebhookEvent, detectArea };
