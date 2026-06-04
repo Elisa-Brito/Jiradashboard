@@ -170,7 +170,7 @@ function SprintSection({ sprint }) {
       )
     ),
     sprint.assignees?.length > 0 && e('div', null,
-      e('div', { className: 'section-title', style: { fontSize: 12, marginBottom: 10 } }, 'Carga por Desenvolvedor'),
+      e('div', { className: 'section-title', style: { fontSize: 12, marginBottom: 10 } }, 'Carga Atual por Desenvolvedor (issues em aberto)'),
       e('div', { className: 'bar-chart' },
         sprint.assignees.map(a =>
           e('div', { key: a.name, className: 'bar-row' },

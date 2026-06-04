@@ -40,8 +40,12 @@ function buildSprintMetrics(issues) {
 
     if (issueType === 'bug') s.bugCount++;
 
-    const shortName = assigneeName.split(' ')[0];
-    s.assignees[shortName] = (s.assignees[shortName] || 0) + 1;
+    // Conta apenas issues não-concluídas para refletir carga atual
+    const isDone = statusCat === 'done' || statusName.includes('conclu');
+    if (!isDone) {
+      const shortName = assigneeName.split(' ')[0];
+      s.assignees[shortName] = (s.assignees[shortName] || 0) + 1;
+    }
   }
 
   s.assignees = Object.entries(s.assignees)
