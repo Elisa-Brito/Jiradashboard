@@ -29,14 +29,20 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
+const REFRESH_INTERVAL_MS = parseInt(process.env.REFRESH_INTERVAL_MINUTES || '5') * 60 * 1000;
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`[Server] Dashboard rodando em http://localhost:${PORT}`);
   console.log(`[Server] Webhook endpoint: POST http://localhost:${PORT}/webhook/jira`);
+  console.log(`[Server] Auto-refresh a cada ${REFRESH_INTERVAL_MS / 60000} minutos`);
 
-  // Auto-seed on startup if metrics are empty
-  const current = store.read();
-  if (!current.lastUpdated) {
-    runSeed().catch(err => console.error('[Seed] Erro:', err.message));
-  }
+  // Seed imediato no startup
+  runSeed().catch(err => console.error('[Seed] Erro no startup:', err.message));
+
+  // Re-seed periódico — garante atualização mesmo sem webhook
+  setInterval(() => {
+    console.log('[Seed] Re-seed periódico...');
+    runSeed().catch(err => console.error('[Seed] Erro no refresh periódico:', err.message));
+  }, REFRESH_INTERVAL_MS);
 });
