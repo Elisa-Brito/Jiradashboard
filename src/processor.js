@@ -49,7 +49,7 @@ function buildSprintMetrics(issues) {
   }
 
   s.assignees = Object.entries(s.assignees)
-    .sort((a, b) => b[1] - a[1])
+    .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([name, count]) => ({ name, count }));
 
   return s;
