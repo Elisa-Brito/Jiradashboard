@@ -210,8 +210,21 @@ function buildSprintOpenBugs(issues) {
 }
 
 // Calcula tempo médio gasto em cada status com base no changelog das issues
+// Só exibe steps de statuses que atualmente têm pelo menos uma issue aberta na sprint
 function buildCycleMetrics(issues) {
   const statusTimes = {};
+
+  // Coleta statuses atualmente ocupados por issues abertas
+  const activeStatuses = new Set();
+  for (const issue of issues) {
+    const fields = issue.fields || issue;
+    const statusCat = (fields.status?.statusCategory?.key || '').toLowerCase();
+    const statusName = (fields.status?.name || '').toLowerCase();
+    const isDone = statusCat === 'done' || statusName.includes('conclu');
+    if (!isDone) {
+      activeStatuses.add(fields.status?.name || '');
+    }
+  }
 
   for (const issue of issues) {
     const fields = issue.fields || issue;
@@ -240,6 +253,7 @@ function buildCycleMetrics(issues) {
 
   const IGNORED = ['backlog', 'to do', 'open', 'concluído', 'done', 'closed'];
   const steps = Object.entries(statusTimes)
+    .filter(([status]) => activeStatuses.has(status))
     .map(([status, times]) => ({
       status,
       avgDays: Math.round((times.reduce((a, b) => a + b, 0) / times.length) * 10) / 10,
