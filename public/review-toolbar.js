@@ -8,6 +8,7 @@
 
   let reviewId = null
   let pins = []
+  let replies = {} // { [pinId]: Reply[] }
   let mode = 'pointer'
   let panelOpen = false
   let activePanel = null // 'threads' | 'handoff'
@@ -15,6 +16,7 @@
   let handoffData = null
   let handoffHistory = []
   let handoffLoading = false
+  let replyingTo = null // pinId being replied to
 
   async function sbFetch(path, opts = {}) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -66,10 +68,23 @@
       .rh-badge.resolved{background:#22c55e}
       .rh-author{color:rgba(255,255,255,.5);font-size:11px;margin:0}
       .rh-body{color:rgba(255,255,255,.85);font-size:13px;line-height:1.5;margin:0}
-      .rh-status-btn{margin-top:8px;font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);color:rgba(255,255,255,.8);cursor:pointer;font-family:inherit}
+      .rh-card-actions{display:flex;gap:6px;margin-top:8px;align-items:center}
+      .rh-status-btn{font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);color:rgba(255,255,255,.8);cursor:pointer;font-family:inherit}
       .rh-status-btn:hover{background:rgba(255,255,255,.12);color:#fff}
-      #rh-comment-form{padding:12px;border-top:1px solid rgba(255,255,255,.06)}
-      #rh-comment-form textarea{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;font-size:13px;padding:10px;resize:none;font-family:inherit;box-sizing:border-box;outline:none}
+      .rh-reply-btn{font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid rgba(99,102,241,.3);background:rgba(99,102,241,.08);color:#a5b4fc;cursor:pointer;font-family:inherit}
+      .rh-reply-btn:hover{background:rgba(99,102,241,.18);color:#c7d2fe}
+      .rh-replies{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;gap:6px}
+      .rh-reply{background:rgba(255,255,255,.03);border-radius:8px;padding:8px 10px}
+      .rh-reply-author{color:rgba(255,255,255,.4);font-size:10px;margin:0 0 3px}
+      .rh-reply-body{color:rgba(255,255,255,.75);font-size:12px;line-height:1.5;margin:0}
+      .rh-reply-form{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)}
+      .rh-reply-form input,.rh-reply-form textarea{width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:7px;color:#fff;font-size:12px;padding:7px 9px;font-family:inherit;box-sizing:border-box;outline:none;margin-bottom:6px}
+      .rh-reply-form textarea{resize:none}
+      .rh-reply-form input::placeholder,.rh-reply-form textarea::placeholder{color:rgba(255,255,255,.25)}
+      .rh-reply-actions{display:flex;gap:6px}
+      .rh-reply-cancel{flex:1;padding:6px;border-radius:7px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);color:rgba(255,255,255,.8);font-size:12px;cursor:pointer;font-family:inherit}
+      .rh-reply-send{flex:1;padding:6px;border-radius:7px;border:none;background:#6366f1;color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+      .rh-reply-send:disabled{opacity:.5;cursor:not-allowed}
       .rh-form-actions{display:flex;gap:8px;margin-top:8px}
       .rh-btn-cancel{flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);color:rgba(255,255,255,.8);font-size:13px;cursor:pointer;font-family:inherit}
       .rh-btn-save{flex:1;padding:8px;border-radius:8px;border:none;background:#6366f1;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
@@ -132,7 +147,7 @@
 
     document.getElementById('rh-panel-close').onclick = closePanel
 
-    // Popover
+    // Popover (new comment)
     const popover = document.createElement('div')
     popover.id = 'rh-popover'
     popover.innerHTML = `
@@ -191,6 +206,7 @@
   function closePanel() {
     panelOpen = false
     activePanel = null
+    replyingTo = null
     document.getElementById('rh-panel').classList.remove('open')
     cancelComment()
     updateToolbar()
@@ -200,7 +216,6 @@
     const pop = document.getElementById('rh-popover')
     document.getElementById('rh-author-input').value = ''
     document.getElementById('rh-textarea').value = ''
-    // Position near click, keep within viewport
     const pw = 260, ph = 160
     let left = clientX + window.scrollX + 16
     let top = clientY + window.scrollY + 16
@@ -249,23 +264,100 @@
       list.innerHTML = '<div id="rh-empty">Nenhum comentário ainda.<br>Ative o modo comentário e clique na tela.</div>'
       return
     }
-    list.innerHTML = pins.map((pin, i) => `
-      <div class="rh-card">
-        <div class="rh-card-header">
-          <div class="rh-badge ${pin.status === 'resolved' ? 'resolved' : ''}">${i + 1}</div>
-          <p class="rh-author">${pin.author_name || 'Anônimo'}</p>
-          ${pin.status === 'resolved' ? '<p class="rh-author" style="margin-left:auto;color:#22c55e">✓ resolvido</p>' : ''}
+
+    list.innerHTML = pins.map((pin, i) => {
+      const pinReplies = replies[pin.id] || []
+      const repliesHTML = pinReplies.length > 0 ? `
+        <div class="rh-replies">
+          ${pinReplies.map(r => `
+            <div class="rh-reply">
+              <p class="rh-reply-author">${r.author_name}</p>
+              <p class="rh-reply-body">${r.body}</p>
+            </div>
+          `).join('')}
         </div>
-        <p class="rh-body">${pin.body}</p>
-        <button class="rh-status-btn" data-id="${pin.id}" data-status="${pin.status}">
-          ${pin.status === 'open' ? 'Marcar resolvido' : 'Reabrir'}
-        </button>
-      </div>
-    `).join('')
+      ` : ''
+
+      const replyFormHTML = replyingTo === pin.id ? `
+        <div class="rh-reply-form" id="rh-reply-form-${pin.id}">
+          <input type="text" placeholder="Seu nome (opcional)" id="rh-reply-author-${pin.id}" />
+          <textarea rows="2" placeholder="Sua resposta…" id="rh-reply-body-${pin.id}"></textarea>
+          <div class="rh-reply-actions">
+            <button class="rh-reply-cancel" data-pin="${pin.id}">Cancelar</button>
+            <button class="rh-reply-send" data-pin="${pin.id}">Enviar</button>
+          </div>
+        </div>
+      ` : ''
+
+      return `
+        <div class="rh-card" data-pin-id="${pin.id}">
+          <div class="rh-card-header">
+            <div class="rh-badge ${pin.status === 'resolved' ? 'resolved' : ''}">${i + 1}</div>
+            <p class="rh-author">${pin.author_name || 'Anônimo'}</p>
+            ${pin.status === 'resolved' ? '<p class="rh-author" style="margin-left:auto;color:#22c55e">✓ resolvido</p>' : ''}
+          </div>
+          <p class="rh-body">${pin.body}</p>
+          <div class="rh-card-actions">
+            <button class="rh-status-btn" data-id="${pin.id}" data-status="${pin.status}">
+              ${pin.status === 'open' ? 'Marcar resolvido' : 'Reabrir'}
+            </button>
+            <button class="rh-reply-btn" data-pin="${pin.id}">↩ Responder</button>
+            ${pinReplies.length > 0 ? `<span style="color:rgba(255,255,255,.3);font-size:11px;margin-left:auto">${pinReplies.length} resp.</span>` : ''}
+          </div>
+          ${repliesHTML}
+          ${replyFormHTML}
+        </div>
+      `
+    }).join('')
 
     list.querySelectorAll('.rh-status-btn').forEach(btn => {
       btn.onclick = () => toggleStatus(btn.dataset.id, btn.dataset.status)
     })
+
+    list.querySelectorAll('.rh-reply-btn').forEach(btn => {
+      btn.onclick = () => {
+        replyingTo = replyingTo === btn.dataset.pin ? null : btn.dataset.pin
+        renderPinsList()
+        if (replyingTo) {
+          setTimeout(() => {
+            document.getElementById(`rh-reply-body-${replyingTo}`)?.focus()
+          }, 50)
+        }
+      }
+    })
+
+    list.querySelectorAll('.rh-reply-cancel').forEach(btn => {
+      btn.onclick = () => { replyingTo = null; renderPinsList() }
+    })
+
+    list.querySelectorAll('.rh-reply-send').forEach(btn => {
+      btn.onclick = () => sendReply(btn.dataset.pin)
+    })
+  }
+
+  async function sendReply(pinId) {
+    const bodyEl = document.getElementById(`rh-reply-body-${pinId}`)
+    const authorEl = document.getElementById(`rh-reply-author-${pinId}`)
+    const body = bodyEl?.value.trim()
+    if (!body) return
+
+    const authorName = authorEl?.value.trim() || 'Anônimo'
+    const sendBtn = document.querySelector(`.rh-reply-send[data-pin="${pinId}"]`)
+    if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Enviando…' }
+
+    const data = await sbFetch('replies?select=*', {
+      method: 'POST',
+      prefer: 'return=representation',
+      body: JSON.stringify({ pin_id: pinId, author_name: authorName, body }),
+    })
+
+    if (data?.[0]) {
+      if (!replies[pinId]) replies[pinId] = []
+      replies[pinId].push(data[0])
+    }
+
+    replyingTo = null
+    renderPinsList()
   }
 
   function renderHandoff() {
@@ -348,10 +440,7 @@
       const res = await fetch(`${API_BASE}/api/handoff`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vercelUrl: location.origin,
-          reviewId,
-        }),
+        body: JSON.stringify({ vercelUrl: location.origin, reviewId }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -386,6 +475,7 @@
       }),
     })
     pins.push(data[0])
+    replies[data[0].id] = []
     renderPins()
     renderPinsList()
     document.getElementById('rh-popover').style.display = 'none'
@@ -414,12 +504,27 @@
     try {
       const url = (location.origin + location.pathname).replace(/\/+$/, '') || location.origin
       reviewId = await getOrCreateReview(url)
-      const data = await sbFetch(`pins?review_id=eq.${reviewId}&order=created_at.asc`)
-      pins = data ?? []
-      // Load handoff history
-      const hist = await fetch(`${API_BASE}/api/handoff?reviewId=${reviewId}`).then(r => r.json()).catch(() => [])
+
+      const [pinsData, repliesData, hist] = await Promise.all([
+        sbFetch(`pins?review_id=eq.${reviewId}&order=created_at.asc`),
+        sbFetch(`replies?pin_id=in.(select id from pins where review_id=eq.${reviewId})&order=created_at.asc`),
+        fetch(`${API_BASE}/api/handoff?reviewId=${reviewId}`).then(r => r.json()).catch(() => []),
+      ])
+
+      pins = pinsData ?? []
+
+      // Group replies by pin_id
+      replies = {}
+      pins.forEach(p => { replies[p.id] = [] })
+      if (repliesData && !repliesData.error) {
+        repliesData.forEach(r => {
+          if (replies[r.pin_id]) replies[r.pin_id].push(r)
+        })
+      }
+
       handoffHistory = hist ?? []
       if (handoffHistory.length > 0) handoffData = handoffHistory[0].data
+
       buildUI()
       renderPins()
     } catch (e) {
