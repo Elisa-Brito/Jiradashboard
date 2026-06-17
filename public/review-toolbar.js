@@ -66,11 +66,12 @@
       .rh-badge.resolved{background:#22c55e}
       .rh-author{color:rgba(255,255,255,.5);font-size:11px;margin:0}
       .rh-body{color:rgba(255,255,255,.85);font-size:13px;line-height:1.5;margin:0}
-      .rh-status-btn{margin-top:8px;font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.1);background:none;color:rgba(255,255,255,.4);cursor:pointer;font-family:inherit}
+      .rh-status-btn{margin-top:8px;font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);color:rgba(255,255,255,.8);cursor:pointer;font-family:inherit}
+      .rh-status-btn:hover{background:rgba(255,255,255,.12);color:#fff}
       #rh-comment-form{padding:12px;border-top:1px solid rgba(255,255,255,.06)}
       #rh-comment-form textarea{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;font-size:13px;padding:10px;resize:none;font-family:inherit;box-sizing:border-box;outline:none}
       .rh-form-actions{display:flex;gap:8px;margin-top:8px}
-      .rh-btn-cancel{flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:none;color:rgba(255,255,255,.5);font-size:13px;cursor:pointer;font-family:inherit}
+      .rh-btn-cancel{flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);color:rgba(255,255,255,.8);font-size:13px;cursor:pointer;font-family:inherit}
       .rh-btn-save{flex:1;padding:8px;border-radius:8px;border:none;background:#6366f1;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
       .rh-btn-save:disabled{opacity:.5;cursor:not-allowed}
       #rh-toolbar{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2147483646;display:flex;align-items:center;gap:4px;background:#1c1c1f;border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:6px 10px;box-shadow:0 8px 32px rgba(0,0,0,.5);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
