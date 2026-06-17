@@ -505,9 +505,8 @@
       const url = (location.origin + location.pathname).replace(/\/+$/, '') || location.origin
       reviewId = await getOrCreateReview(url)
 
-      const [pinsData, repliesData, hist] = await Promise.all([
+      const [pinsData, hist] = await Promise.all([
         sbFetch(`pins?review_id=eq.${reviewId}&order=created_at.asc`),
-        sbFetch(`replies?pin_id=in.(select id from pins where review_id=eq.${reviewId})&order=created_at.asc`),
         fetch(`${API_BASE}/api/handoff?reviewId=${reviewId}`).then(r => r.json()).catch(() => []),
       ])
 
@@ -516,10 +515,15 @@
       // Group replies by pin_id
       replies = {}
       pins.forEach(p => { replies[p.id] = [] })
-      if (repliesData && !repliesData.error) {
-        repliesData.forEach(r => {
-          if (replies[r.pin_id]) replies[r.pin_id].push(r)
-        })
+
+      if (pins.length > 0) {
+        const pinIds = pins.map(p => p.id).join(',')
+        const repliesData = await sbFetch(`replies?pin_id=in.(${pinIds})&order=created_at.asc`)
+        if (repliesData && !repliesData.error) {
+          repliesData.forEach(r => {
+            if (replies[r.pin_id]) replies[r.pin_id].push(r)
+          })
+        }
       }
 
       handoffHistory = hist ?? []
