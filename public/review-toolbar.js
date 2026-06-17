@@ -85,6 +85,10 @@
       .rh-reply-cancel{flex:1;padding:6px;border-radius:7px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);color:rgba(255,255,255,.8);font-size:12px;cursor:pointer;font-family:inherit}
       .rh-reply-send{flex:1;padding:6px;border-radius:7px;border:none;background:#6366f1;color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
       .rh-reply-send:disabled{opacity:.5;cursor:not-allowed}
+      .rh-delete-btn{font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);color:#f87171;cursor:pointer;font-family:inherit}
+      .rh-delete-btn:hover{background:rgba(239,68,68,.18);color:#fca5a5}
+      .rh-reply-delete{font-size:10px;padding:2px 6px;border-radius:5px;border:1px solid rgba(239,68,68,.2);background:none;color:rgba(239,68,68,.5);cursor:pointer;font-family:inherit;margin-left:auto;display:block}
+      .rh-reply-delete:hover{background:rgba(239,68,68,.12);color:#f87171}
       .rh-form-actions{display:flex;gap:8px;margin-top:8px}
       .rh-btn-cancel{flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);color:rgba(255,255,255,.8);font-size:13px;cursor:pointer;font-family:inherit}
       .rh-btn-save{flex:1;padding:8px;border-radius:8px;border:none;background:#6366f1;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
@@ -273,6 +277,7 @@
             <div class="rh-reply">
               <p class="rh-reply-author">${r.author_name}</p>
               <p class="rh-reply-body">${r.body}</p>
+              <button class="rh-reply-delete" data-reply-id="${r.id}" data-pin-id="${pin.id}">✕ deletar</button>
             </div>
           `).join('')}
         </div>
@@ -302,6 +307,7 @@
               ${pin.status === 'open' ? 'Marcar resolvido' : 'Reabrir'}
             </button>
             <button class="rh-reply-btn" data-pin="${pin.id}">↩ Responder</button>
+            <button class="rh-delete-btn" data-pin-id="${pin.id}">✕</button>
             ${pinReplies.length > 0 ? `<span style="color:rgba(255,255,255,.3);font-size:11px;margin-left:auto">${pinReplies.length} resp.</span>` : ''}
           </div>
           ${repliesHTML}
@@ -332,6 +338,14 @@
 
     list.querySelectorAll('.rh-reply-send').forEach(btn => {
       btn.onclick = () => sendReply(btn.dataset.pin)
+    })
+
+    list.querySelectorAll('.rh-delete-btn').forEach(btn => {
+      btn.onclick = () => deletePin(btn.dataset.pinId)
+    })
+
+    list.querySelectorAll('.rh-reply-delete').forEach(btn => {
+      btn.onclick = () => deleteReply(btn.dataset.replyId, btn.dataset.pinId)
     })
   }
 
@@ -485,6 +499,22 @@
     updateToolbar()
     btn.disabled = false
     btn.textContent = 'Salvar'
+  }
+
+  async function deletePin(pinId) {
+    if (!confirm('Deletar este comentário e todas as respostas?')) return
+    await sbFetch(`pins?id=eq.${pinId}`, { method: 'DELETE', prefer: 'return=minimal' })
+    pins = pins.filter(p => p.id !== pinId)
+    delete replies[pinId]
+    if (replyingTo === pinId) replyingTo = null
+    renderPins()
+    renderPinsList()
+  }
+
+  async function deleteReply(replyId, pinId) {
+    await sbFetch(`replies?id=eq.${replyId}`, { method: 'DELETE', prefer: 'return=minimal' })
+    if (replies[pinId]) replies[pinId] = replies[pinId].filter(r => r.id !== replyId)
+    renderPinsList()
   }
 
   async function toggleStatus(pinId, current) {
