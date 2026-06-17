@@ -277,7 +277,7 @@
             <div class="rh-reply">
               <p class="rh-reply-author">${r.author_name}</p>
               <p class="rh-reply-body">${r.body}</p>
-              <button class="rh-reply-delete" data-reply-id="${r.id}" data-pin-id="${pin.id}">✕ deletar</button>
+              <button class="rh-reply-delete" data-reply-id="${r.id}" data-pin-id="${pin.id}" title="Deletar resposta"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
             </div>
           `).join('')}
         </div>
@@ -307,7 +307,7 @@
               ${pin.status === 'open' ? 'Marcar resolvido' : 'Reabrir'}
             </button>
             <button class="rh-reply-btn" data-pin="${pin.id}">↩ Responder</button>
-            <button class="rh-delete-btn" data-pin-id="${pin.id}">✕</button>
+            <button class="rh-delete-btn" data-pin-id="${pin.id}" title="Deletar comentário"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
             ${pinReplies.length > 0 ? `<span style="color:rgba(255,255,255,.3);font-size:11px;margin-left:auto">${pinReplies.length} resp.</span>` : ''}
           </div>
           ${repliesHTML}
