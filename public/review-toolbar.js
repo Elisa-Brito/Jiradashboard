@@ -46,7 +46,7 @@
     const css = `
       #rh-overlay{position:fixed;inset:0;z-index:2147483640;pointer-events:none}
       #rh-overlay.active{pointer-events:all;cursor:crosshair}
-      .rh-pin{position:fixed;width:28px;height:28px;border-radius:50% 50% 50% 0;background:#6366f1;border:2px solid #fff;transform:rotate(-45deg);cursor:pointer;pointer-events:all;box-shadow:0 2px 8px rgba(0,0,0,.3);z-index:2147483641;display:flex;align-items:center;justify-content:center}
+      .rh-pin{position:absolute;width:28px;height:28px;border-radius:50% 50% 50% 0;background:#6366f1;border:2px solid #fff;transform:rotate(-45deg);cursor:pointer;pointer-events:all;box-shadow:0 2px 8px rgba(0,0,0,.3);z-index:2147483641;display:flex;align-items:center;justify-content:center}
       .rh-pin.resolved{background:#22c55e}
       .rh-pin span{transform:rotate(45deg);color:#fff;font-size:11px;font-weight:700;font-family:-apple-system,sans-serif}
       #rh-panel{position:fixed;top:0;right:0;width:300px;height:100vh;background:#18181b;border-left:1px solid rgba(255,255,255,.08);z-index:2147483645;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;box-shadow:-4px 0 24px rgba(0,0,0,.4);transform:translateX(100%);transition:transform .2s ease}
@@ -104,8 +104,8 @@
     overlay.id = 'rh-overlay'
     overlay.addEventListener('click', (e) => {
       if (mode !== 'comment') return
-      const x = (e.clientX / window.innerWidth) * 100
-      const y = (e.clientY / window.innerHeight) * 100
+      const x = (e.pageX / document.documentElement.scrollWidth) * 100
+      const y = (e.pageY / document.documentElement.scrollHeight) * 100
       pendingPos = { x, y }
       openPanel('threads')
       document.getElementById('rh-comment-form').style.display = 'block'
@@ -206,8 +206,8 @@
     pins.forEach((pin, i) => {
       const el = document.createElement('div')
       el.className = 'rh-pin' + (pin.status === 'resolved' ? ' resolved' : '')
-      el.style.left = `calc(${pin.x_percent}% - 14px)`
-      el.style.top = `calc(${pin.y_percent}% - 14px)`
+      el.style.left = `calc(${pin.x_percent / 100 * document.documentElement.scrollWidth}px - 14px)`
+      el.style.top = `calc(${pin.y_percent / 100 * document.documentElement.scrollHeight}px - 14px)`
       el.innerHTML = `<span>${i + 1}</span>`
       el.onclick = (e) => { e.stopPropagation(); openPanel('threads') }
       document.body.appendChild(el)
@@ -361,7 +361,11 @@
     pins.push(data[0])
     renderPins()
     renderPinsList()
-    cancelComment()
+    pendingPos = null
+    document.getElementById('rh-comment-form').style.display = 'none'
+    mode = 'pointer'
+    document.getElementById('rh-overlay').classList.remove('active')
+    updateToolbar()
     btn.disabled = false
     btn.textContent = 'Salvar'
   }
