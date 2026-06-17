@@ -46,6 +46,11 @@
     const css = `
       #rh-overlay{position:fixed;inset:0;z-index:2147483640;pointer-events:none}
       #rh-overlay.active{pointer-events:all;cursor:crosshair}
+      #rh-popover{position:absolute;width:260px;background:#1c1c1f;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:none}
+      #rh-popover input,#rh-popover textarea{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;font-size:13px;padding:8px 10px;font-family:inherit;box-sizing:border-box;outline:none;margin-bottom:8px}
+      #rh-popover textarea{resize:none}
+      #rh-popover input::placeholder,#rh-popover textarea::placeholder{color:rgba(255,255,255,.3)}
+      #rh-popover .rh-form-actions{display:flex;gap:8px;margin-top:4px}
       .rh-pin{position:absolute;width:28px;height:28px;border-radius:50% 50% 50% 0;background:#6366f1;border:2px solid #fff;transform:rotate(-45deg);cursor:pointer;pointer-events:all;box-shadow:0 2px 8px rgba(0,0,0,.3);z-index:2147483641;display:flex;align-items:center;justify-content:center}
       .rh-pin.resolved{background:#22c55e}
       .rh-pin span{transform:rotate(45deg);color:#fff;font-size:11px;font-weight:700;font-family:-apple-system,sans-serif}
@@ -107,10 +112,7 @@
       const x = (e.pageX / document.documentElement.scrollWidth) * 100
       const y = (e.pageY / document.documentElement.scrollHeight) * 100
       pendingPos = { x, y }
-      openPanel('threads')
-      document.getElementById('rh-comment-form').style.display = 'block'
-      document.getElementById('rh-textarea').value = ''
-      document.getElementById('rh-textarea').focus()
+      showPopover(e.clientX, e.clientY)
     })
     document.body.appendChild(overlay)
 
@@ -124,17 +126,24 @@
       </div>
       <div id="rh-pins-list"></div>
       <div id="rh-handoff-content" style="display:none"></div>
-      <div id="rh-comment-form" style="display:none">
-        <textarea id="rh-textarea" rows="3" placeholder="Digite seu comentário…"></textarea>
-        <div class="rh-form-actions">
-          <button class="rh-btn-cancel" id="rh-cancel">Cancelar</button>
-          <button class="rh-btn-save" id="rh-save">Salvar</button>
-        </div>
-      </div>
     `
     document.body.appendChild(panel)
 
     document.getElementById('rh-panel-close').onclick = closePanel
+
+    // Popover
+    const popover = document.createElement('div')
+    popover.id = 'rh-popover'
+    popover.innerHTML = `
+      <input id="rh-author-input" type="text" placeholder="Seu nome (opcional)" />
+      <textarea id="rh-textarea" rows="3" placeholder="Digite seu comentário…"></textarea>
+      <div class="rh-form-actions">
+        <button class="rh-btn-cancel" id="rh-cancel">Cancelar</button>
+        <button class="rh-btn-save" id="rh-save">Salvar</button>
+      </div>
+    `
+    document.body.appendChild(popover)
+
     document.getElementById('rh-cancel').onclick = cancelComment
     document.getElementById('rh-save').onclick = handleSave
 
@@ -186,10 +195,26 @@
     updateToolbar()
   }
 
+  function showPopover(clientX, clientY) {
+    const pop = document.getElementById('rh-popover')
+    document.getElementById('rh-author-input').value = ''
+    document.getElementById('rh-textarea').value = ''
+    // Position near click, keep within viewport
+    const pw = 260, ph = 160
+    let left = clientX + window.scrollX + 16
+    let top = clientY + window.scrollY + 16
+    if (clientX + pw + 20 > window.innerWidth) left = clientX + window.scrollX - pw - 8
+    if (clientY + ph + 20 > window.innerHeight) top = clientY + window.scrollY - ph - 8
+    pop.style.left = left + 'px'
+    pop.style.top = top + 'px'
+    pop.style.display = 'block'
+    document.getElementById('rh-textarea').focus()
+  }
+
   function cancelComment() {
     pendingPos = null
-    const form = document.getElementById('rh-comment-form')
-    if (form) form.style.display = 'none'
+    const pop = document.getElementById('rh-popover')
+    if (pop) pop.style.display = 'none'
     mode = 'pointer'
     document.getElementById('rh-overlay').classList.remove('active')
     updateToolbar()
@@ -343,6 +368,7 @@
     if (!pendingPos || !reviewId) return
     const body = document.getElementById('rh-textarea').value.trim()
     if (!body) return
+    const authorName = document.getElementById('rh-author-input').value.trim() || 'Anônimo'
     const btn = document.getElementById('rh-save')
     btn.disabled = true
     btn.textContent = 'Salvando…'
@@ -354,15 +380,15 @@
         x_percent: pendingPos.x,
         y_percent: pendingPos.y,
         body,
-        author_name: 'Anônimo',
+        author_name: authorName,
         status: 'open',
       }),
     })
     pins.push(data[0])
     renderPins()
     renderPinsList()
+    document.getElementById('rh-popover').style.display = 'none'
     pendingPos = null
-    document.getElementById('rh-comment-form').style.display = 'none'
     mode = 'pointer'
     document.getElementById('rh-overlay').classList.remove('active')
     updateToolbar()
