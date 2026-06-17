@@ -110,7 +110,7 @@
     overlay.id = 'rh-overlay'
     overlay.addEventListener('click', (e) => {
       if (mode !== 'comment') return
-      const x = (e.pageX / document.documentElement.scrollWidth) * 100
+      const x = (e.pageX / document.documentElement.clientWidth) * 100
       const y = (e.pageY / document.documentElement.scrollHeight) * 100
       pendingPos = { x, y }
       showPopover(e.clientX, e.clientY)
@@ -232,7 +232,7 @@
     pins.forEach((pin, i) => {
       const el = document.createElement('div')
       el.className = 'rh-pin' + (pin.status === 'resolved' ? ' resolved' : '')
-      el.style.left = `calc(${pin.x_percent / 100 * document.documentElement.scrollWidth}px - 14px)`
+      el.style.left = `calc(${pin.x_percent / 100 * document.documentElement.clientWidth}px - 14px)`
       el.style.top = `calc(${pin.y_percent / 100 * document.documentElement.scrollHeight}px - 14px)`
       el.innerHTML = `<span>${i + 1}</span>`
       el.onclick = (e) => { e.stopPropagation(); openPanel('threads') }
