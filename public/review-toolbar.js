@@ -6,6 +6,18 @@
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrbXRiaG5maXBhdHhlY3hweWZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2MTE3MzMsImV4cCI6MjA5NzE4NzczM30.Q95hSSGtJcm47xhN7Rn5fFJBvjB94oLjeC3uavLC-Ps'
   const API_BASE = 'https://review-handoff-system.vercel.app'
   const LS_NAME_KEY = 'rh_author_name'
+  const LS_ID_KEY = 'rh_user_id'
+
+  function getUserId() {
+    try {
+      let id = localStorage.getItem(LS_ID_KEY)
+      if (!id) {
+        id = 'u_' + Math.random().toString(36).slice(2) + Date.now().toString(36)
+        localStorage.setItem(LS_ID_KEY, id)
+      }
+      return id
+    } catch { return 'anon' }
+  }
 
   // SVG lixeira — mesmo ícone em todos os lugares, só o tamanho muda
   const trashIcon = (size) =>
@@ -32,6 +44,50 @@
   // Nome persistido via localStorage
   function getSavedName() { try { return localStorage.getItem(LS_NAME_KEY) || '' } catch { return '' } }
   function saveName(name) { try { if (name) localStorage.setItem(LS_NAME_KEY, name) } catch {} }
+
+  function showNamePrompt(onDone) {
+    const el = document.createElement('div')
+    el.id = 'rh-name-prompt'
+    el.innerHTML = `
+      <div id="rh-name-prompt-box">
+        <p id="rh-name-prompt-title">👋 Como quer ser chamado?</p>
+        <p id="rh-name-prompt-sub">Seu nome aparecerá nos comentários deste protótipo.</p>
+        <input id="rh-name-prompt-input" type="text" placeholder="Seu nome…" autocomplete="off" />
+        <button id="rh-name-prompt-btn">Entrar</button>
+      </div>
+    `
+    const style = document.createElement('style')
+    style.textContent = `
+      #rh-name-prompt{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2147483648;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+      #rh-name-prompt-box{background:#1c1c1f;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:28px 24px;width:300px;box-shadow:0 24px 64px rgba(0,0,0,.6)}
+      #rh-name-prompt-title{color:#fff;font-size:16px;font-weight:600;margin:0 0 6px}
+      #rh-name-prompt-sub{color:rgba(255,255,255,.4);font-size:13px;margin:0 0 18px;line-height:1.5}
+      #rh-name-prompt-input{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-size:14px;padding:10px 12px;font-family:inherit;box-sizing:border-box;outline:none;margin-bottom:12px}
+      #rh-name-prompt-input:focus{border-color:rgba(99,102,241,.6)}
+      #rh-name-prompt-input::placeholder{color:rgba(255,255,255,.25)}
+      #rh-name-prompt-btn{width:100%;padding:10px;border-radius:10px;border:none;background:#6366f1;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+      #rh-name-prompt-btn:hover{background:#4f46e5}
+    `
+    document.head.appendChild(style)
+    document.body.appendChild(el)
+
+    const input = document.getElementById('rh-name-prompt-input')
+    const btn = document.getElementById('rh-name-prompt-btn')
+    setTimeout(() => input.focus(), 50)
+
+    function confirm() {
+      const name = input.value.trim()
+      if (!name) { input.focus(); return }
+      saveName(name)
+      getUserId() // garante que o ID existe
+      el.remove()
+      style.remove()
+      onDone()
+    }
+
+    btn.onclick = confirm
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirm() })
+  }
 
   async function sbFetch(path, opts = {}) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -198,7 +254,7 @@
     const popover = document.createElement('div')
     popover.id = 'rh-popover'
     popover.innerHTML = `
-      <input id="rh-author-input" type="text" placeholder="Seu nome (opcional)" />
+      <p id="rh-popover-author" style="color:rgba(255,255,255,.4);font-size:11px;margin:0 0 8px"></p>
       <textarea id="rh-textarea" rows="3" placeholder="Digite seu comentário…"></textarea>
       <div class="rh-form-actions">
         <button class="rh-btn-cancel" id="rh-cancel">Cancelar</button>
@@ -385,8 +441,7 @@
 
   function showPopover(clientX, clientY) {
     const pop = document.getElementById('rh-popover')
-    const savedName = getSavedName()
-    document.getElementById('rh-author-input').value = savedName
+    document.getElementById('rh-popover-author').textContent = getSavedName()
     document.getElementById('rh-textarea').value = ''
     const pw = 260, ph = 160
     let left = clientX + window.scrollX + 16
@@ -396,11 +451,7 @@
     pop.style.left = left + 'px'
     pop.style.top = top + 'px'
     pop.style.display = 'block'
-    if (savedName) {
-      document.getElementById('rh-textarea').focus()
-    } else {
-      document.getElementById('rh-author-input').focus()
-    }
+    document.getElementById('rh-textarea').focus()
   }
 
   function cancelComment() {
@@ -466,7 +517,6 @@
 
       const replyFormHTML = replyingTo === pin.id ? `
         <div class="rh-reply-form">
-          <input type="text" placeholder="Seu nome (opcional)" id="rh-reply-author-${pin.id}" value="${getSavedName()}" />
           <textarea rows="2" placeholder="Sua resposta…" id="rh-reply-body-${pin.id}"></textarea>
           <div class="rh-reply-actions">
             <button class="rh-reply-cancel" data-pin="${pin.id}">Cancelar</button>
@@ -529,8 +579,7 @@
     if (!pendingPos || !reviewId) return
     const body = document.getElementById('rh-textarea').value.trim()
     if (!body) return
-    const authorName = document.getElementById('rh-author-input').value.trim() || 'Anônimo'
-    saveName(authorName)
+    const authorName = getSavedName() || 'Anônimo'
     const btn = document.getElementById('rh-save')
     btn.disabled = true
     btn.textContent = 'Salvando…'
@@ -561,11 +610,9 @@
 
   async function sendReply(pinId) {
     const bodyEl = document.getElementById(`rh-reply-body-${pinId}`)
-    const authorEl = document.getElementById(`rh-reply-author-${pinId}`)
     const body = bodyEl?.value.trim()
     if (!body) return
-    const authorName = authorEl?.value.trim() || getSavedName() || 'Anônimo'
-    saveName(authorName)
+    const authorName = getSavedName() || 'Anônimo'
     const sendBtn = document.querySelector(`.rh-reply-send[data-pin="${pinId}"]`)
     if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Enviando…' }
     const data = await sbFetch('replies?select=*', {
@@ -710,6 +757,19 @@
   // ── Init ─────────────────────────────────────────────────────────────────
 
   async function init() {
+    try {
+      if (!getSavedName()) {
+        showNamePrompt(startApp)
+      } else {
+        getUserId()
+        startApp()
+      }
+    } catch (e) {
+      console.error('[review-handoff]', e)
+    }
+  }
+
+  async function startApp() {
     try {
       const url = (location.origin + location.pathname).replace(/\/+$/, '') || location.origin
       reviewId = await getOrCreateReview(url)
