@@ -45,49 +45,6 @@
   function getSavedName() { try { return localStorage.getItem(LS_NAME_KEY) || '' } catch { return '' } }
   function saveName(name) { try { if (name) localStorage.setItem(LS_NAME_KEY, name) } catch {} }
 
-  function showNamePrompt(onDone) {
-    const el = document.createElement('div')
-    el.id = 'rh-name-prompt'
-    el.innerHTML = `
-      <div id="rh-name-prompt-box">
-        <p id="rh-name-prompt-title">👋 Como quer ser chamado?</p>
-        <p id="rh-name-prompt-sub">Seu nome aparecerá nos comentários deste protótipo.</p>
-        <input id="rh-name-prompt-input" type="text" placeholder="Seu nome…" autocomplete="off" />
-        <button id="rh-name-prompt-btn">Entrar</button>
-      </div>
-    `
-    const style = document.createElement('style')
-    style.textContent = `
-      #rh-name-prompt{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2147483648;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-      #rh-name-prompt-box{background:#1c1c1f;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:28px 24px;width:300px;box-shadow:0 24px 64px rgba(0,0,0,.6)}
-      #rh-name-prompt-title{color:#fff;font-size:16px;font-weight:600;margin:0 0 6px}
-      #rh-name-prompt-sub{color:rgba(255,255,255,.4);font-size:13px;margin:0 0 18px;line-height:1.5}
-      #rh-name-prompt-input{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-size:14px;padding:10px 12px;font-family:inherit;box-sizing:border-box;outline:none;margin-bottom:12px}
-      #rh-name-prompt-input:focus{border-color:rgba(99,102,241,.6)}
-      #rh-name-prompt-input::placeholder{color:rgba(255,255,255,.25)}
-      #rh-name-prompt-btn{width:100%;padding:10px;border-radius:10px;border:none;background:#6366f1;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
-      #rh-name-prompt-btn:hover{background:#4f46e5}
-    `
-    document.head.appendChild(style)
-    document.body.appendChild(el)
-
-    const input = document.getElementById('rh-name-prompt-input')
-    const btn = document.getElementById('rh-name-prompt-btn')
-    setTimeout(() => input.focus(), 50)
-
-    function confirm() {
-      const name = input.value.trim()
-      if (!name) { input.focus(); return }
-      saveName(name)
-      getUserId() // garante que o ID existe
-      el.remove()
-      style.remove()
-      onDone()
-    }
-
-    btn.onclick = confirm
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirm() })
-  }
 
   async function sbFetch(path, opts = {}) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -254,7 +211,11 @@
     const popover = document.createElement('div')
     popover.id = 'rh-popover'
     popover.innerHTML = `
-      <p id="rh-popover-author" style="color:rgba(255,255,255,.4);font-size:11px;margin:0 0 8px"></p>
+      <div id="rh-name-field" style="display:none">
+        <p style="color:rgba(255,255,255,.5);font-size:11px;margin:0 0 6px">👋 Como quer ser chamado?</p>
+        <input id="rh-author-input" type="text" placeholder="Seu nome…" autocomplete="off" />
+      </div>
+      <p id="rh-popover-author" style="color:rgba(255,255,255,.4);font-size:11px;margin:0 0 8px;display:none"></p>
       <textarea id="rh-textarea" rows="3" placeholder="Digite seu comentário…"></textarea>
       <div class="rh-form-actions">
         <button class="rh-btn-cancel" id="rh-cancel">Cancelar</button>
@@ -441,7 +402,17 @@
 
   function showPopover(clientX, clientY) {
     const pop = document.getElementById('rh-popover')
-    document.getElementById('rh-popover-author').textContent = getSavedName()
+    const savedName = getSavedName()
+    const nameField = document.getElementById('rh-name-field')
+    const authorLabel = document.getElementById('rh-popover-author')
+    if (savedName) {
+      nameField.style.display = 'none'
+      authorLabel.style.display = 'block'
+      authorLabel.textContent = savedName
+    } else {
+      nameField.style.display = 'block'
+      authorLabel.style.display = 'none'
+    }
     document.getElementById('rh-textarea').value = ''
     const pw = 260, ph = 160
     let left = clientX + window.scrollX + 16
@@ -451,7 +422,11 @@
     pop.style.left = left + 'px'
     pop.style.top = top + 'px'
     pop.style.display = 'block'
-    document.getElementById('rh-textarea').focus()
+    if (savedName) {
+      document.getElementById('rh-textarea').focus()
+    } else {
+      document.getElementById('rh-author-input').focus()
+    }
   }
 
   function cancelComment() {
@@ -579,7 +554,9 @@
     if (!pendingPos || !reviewId) return
     const body = document.getElementById('rh-textarea').value.trim()
     if (!body) return
-    const authorName = getSavedName() || 'Anônimo'
+    const inputName = document.getElementById('rh-author-input')?.value.trim()
+    if (inputName) saveName(inputName)
+    const authorName = getSavedName() || inputName || 'Anônimo'
     const btn = document.getElementById('rh-save')
     btn.disabled = true
     btn.textContent = 'Salvando…'
@@ -757,16 +734,8 @@
   // ── Init ─────────────────────────────────────────────────────────────────
 
   async function init() {
-    try {
-      if (!getSavedName()) {
-        showNamePrompt(startApp)
-      } else {
-        getUserId()
-        startApp()
-      }
-    } catch (e) {
-      console.error('[review-handoff]', e)
-    }
+    getUserId()
+    startApp()
   }
 
   async function startApp() {
