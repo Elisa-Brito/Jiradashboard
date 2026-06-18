@@ -39,7 +39,8 @@
   let handoffHistory = []
   let handoffLoading = false
   let replyingTo = null
-  let pinPopoverPinId = null // pin cujo mini-popover está aberto
+  let replyingToReply = null  // { replyId, authorName } para @mention
+  let pinPopoverPinId = null
 
   // Nome persistido via localStorage
   function getSavedName() { try { return localStorage.getItem(LS_NAME_KEY) || '' } catch { return '' } }
@@ -323,7 +324,10 @@
     ` : ''
 
     pp.innerHTML = `
-      <p class="rh-pp-author">${pin.author_name || 'Anônimo'} · #${pinIndex + 1}</p>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:4px">
+        <p class="rh-pp-author" style="margin:0">${pin.author_name || 'Anônimo'} · #${pinIndex + 1}</p>
+        <button class="rh-trash" id="rh-pp-delete" title="Deletar comentário" style="flex-shrink:0">${trashIcon(12)}</button>
+      </div>
       <p class="rh-pp-body">${pin.body}</p>
       ${repliesHTML}
       ${replyFormHTML}
@@ -340,6 +344,8 @@
       renderPinPopover(pin, pinIndex)
       if (replyingTo) setTimeout(() => document.getElementById('rh-pp-reply-body')?.focus(), 50)
     }
+
+    document.getElementById('rh-pp-delete').onclick = () => deletePin(pin.id)
 
     document.getElementById('rh-pp-status-btn').onclick = async () => {
       await toggleStatus(pin.id, pin.status)
@@ -482,16 +488,23 @@
         <div class="rh-replies">
           ${pinReplies.map(r => `
             <div class="rh-reply">
-              <p class="rh-reply-author">${r.author_name}</p>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+                <p class="rh-reply-author" style="margin:0">${r.author_name}</p>
+                <div style="display:flex;gap:4px;align-items:center">
+                  <button class="rh-reply-to-reply-btn" data-reply-id="${r.id}" data-reply-author="${r.author_name}" data-pin="${pin.id}" style="font-size:10px;padding:2px 6px;border-radius:5px;border:1px solid rgba(99,102,241,.25);background:rgba(99,102,241,.07);color:#a5b4fc;cursor:pointer;font-family:inherit">↩</button>
+                  <button class="rh-trash" data-reply-id="${r.id}" data-pin-id="${pin.id}" title="Deletar resposta">${trashIcon(11)}</button>
+                </div>
+              </div>
               <p class="rh-reply-body">${r.body}</p>
-              <button class="rh-trash" data-reply-id="${r.id}" data-pin-id="${pin.id}" title="Deletar resposta" style="margin-top:6px">${trashIcon(11)}</button>
             </div>
           `).join('')}
         </div>
       ` : ''
 
+      const isReplyingToReply = replyingTo === pin.id && replyingToReply
       const replyFormHTML = replyingTo === pin.id ? `
         <div class="rh-reply-form">
+          ${isReplyingToReply ? `<p style="color:#a5b4fc;font-size:11px;margin:0 0 6px">↩ respondendo @${replyingToReply.authorName}</p>` : ''}
           <textarea rows="2" placeholder="Sua resposta…" id="rh-reply-body-${pin.id}"></textarea>
           <div class="rh-reply-actions">
             <button class="rh-reply-cancel" data-pin="${pin.id}">Cancelar</button>
@@ -527,13 +540,23 @@
     })
     list.querySelectorAll('.rh-reply-btn').forEach(btn => {
       btn.onclick = () => {
-        replyingTo = replyingTo === btn.dataset.pin ? null : btn.dataset.pin
+        const same = replyingTo === btn.dataset.pin
+        replyingTo = same ? null : btn.dataset.pin
+        replyingToReply = null
         renderPinsList()
         if (replyingTo) setTimeout(() => document.getElementById(`rh-reply-body-${replyingTo}`)?.focus(), 50)
       }
     })
+    list.querySelectorAll('.rh-reply-to-reply-btn').forEach(btn => {
+      btn.onclick = () => {
+        replyingTo = btn.dataset.pin
+        replyingToReply = { replyId: btn.dataset.replyId, authorName: btn.dataset.replyAuthor }
+        renderPinsList()
+        setTimeout(() => document.getElementById(`rh-reply-body-${btn.dataset.pin}`)?.focus(), 50)
+      }
+    })
     list.querySelectorAll('.rh-reply-cancel').forEach(btn => {
-      btn.onclick = () => { replyingTo = null; renderPinsList() }
+      btn.onclick = () => { replyingTo = null; replyingToReply = null; renderPinsList() }
     })
     list.querySelectorAll('.rh-reply-send').forEach(btn => {
       btn.onclick = () => sendReply(btn.dataset.pin)
@@ -587,8 +610,10 @@
 
   async function sendReply(pinId) {
     const bodyEl = document.getElementById(`rh-reply-body-${pinId}`)
-    const body = bodyEl?.value.trim()
-    if (!body) return
+    const rawBody = bodyEl?.value.trim()
+    if (!rawBody) return
+    const mention = replyingToReply ? `@${replyingToReply.authorName} ` : ''
+    const body = mention + rawBody
     const authorName = getSavedName() || 'Anônimo'
     const sendBtn = document.querySelector(`.rh-reply-send[data-pin="${pinId}"]`)
     if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Enviando…' }
@@ -602,6 +627,7 @@
       replies[pinId].push(data[0])
     }
     replyingTo = null
+    replyingToReply = null
     renderPinsList()
   }
 
