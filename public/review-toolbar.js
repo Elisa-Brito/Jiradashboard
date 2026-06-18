@@ -527,7 +527,6 @@
             </button>
             <button class="rh-reply-btn" data-pin="${pin.id}">↩ Responder</button>
             <button class="rh-trash" data-pin-id="${pin.id}" title="Deletar comentário">${trashIcon(13)}</button>
-            ${pinReplies.length > 0 ? `<span style="color:rgba(255,255,255,.3);font-size:11px;margin-left:auto">${pinReplies.length} resp.</span>` : ''}
           </div>
           ${repliesHTML}
           ${replyFormHTML}
