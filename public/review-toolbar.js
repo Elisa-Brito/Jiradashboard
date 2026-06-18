@@ -5,18 +5,33 @@
   const SUPABASE_URL = 'https://ikmtbhnfipatxecxpyfa.supabase.co'
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrbXRiaG5maXBhdHhlY3hweWZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2MTE3MzMsImV4cCI6MjA5NzE4NzczM30.Q95hSSGtJcm47xhN7Rn5fFJBvjB94oLjeC3uavLC-Ps'
   const API_BASE = 'https://review-handoff-system.vercel.app'
+  const LS_NAME_KEY = 'rh_author_name'
+
+  // SVG lixeira — mesmo ícone em todos os lugares, só o tamanho muda
+  const trashIcon = (size) =>
+    `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="3 6 5 6 21 6"/>
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+      <path d="M10 11v6"/><path d="M14 11v6"/>
+      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+    </svg>`
 
   let reviewId = null
   let pins = []
-  let replies = {} // { [pinId]: Reply[] }
+  let replies = {}
   let mode = 'pointer'
   let panelOpen = false
-  let activePanel = null // 'threads' | 'handoff'
+  let activePanel = null
   let pendingPos = null
   let handoffData = null
   let handoffHistory = []
   let handoffLoading = false
-  let replyingTo = null // pinId being replied to
+  let replyingTo = null
+  let pinPopoverPinId = null // pin cujo mini-popover está aberto
+
+  // Nome persistido via localStorage
+  function getSavedName() { try { return localStorage.getItem(LS_NAME_KEY) || '' } catch { return '' } }
+  function saveName(name) { try { if (name) localStorage.setItem(LS_NAME_KEY, name) } catch {} }
 
   async function sbFetch(path, opts = {}) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -48,14 +63,41 @@
     const css = `
       #rh-overlay{position:fixed;inset:0;z-index:2147483640;pointer-events:none}
       #rh-overlay.active{pointer-events:all;cursor:crosshair}
+
+      /* Popover novo comentário */
       #rh-popover{position:absolute;width:260px;background:#1c1c1f;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:none}
       #rh-popover input,#rh-popover textarea{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;font-size:13px;padding:8px 10px;font-family:inherit;box-sizing:border-box;outline:none;margin-bottom:8px}
       #rh-popover textarea{resize:none}
       #rh-popover input::placeholder,#rh-popover textarea::placeholder{color:rgba(255,255,255,.3)}
       #rh-popover .rh-form-actions{display:flex;gap:8px;margin-top:4px}
+
+      /* Mini-popover ao clicar no pin */
+      #rh-pin-popover{position:absolute;width:240px;background:#1c1c1f;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:none}
+      #rh-pin-popover .rh-pp-author{color:rgba(255,255,255,.4);font-size:10px;margin:0 0 4px}
+      #rh-pin-popover .rh-pp-body{color:rgba(255,255,255,.88);font-size:13px;line-height:1.5;margin:0 0 8px}
+      #rh-pin-popover .rh-pp-replies{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;max-height:140px;overflow-y:auto}
+      #rh-pin-popover .rh-pp-reply{background:rgba(255,255,255,.04);border-radius:7px;padding:6px 8px}
+      #rh-pin-popover .rh-pp-reply-author{color:rgba(255,255,255,.35);font-size:10px;margin:0 0 2px}
+      #rh-pin-popover .rh-pp-reply-body{color:rgba(255,255,255,.7);font-size:12px;line-height:1.4;margin:0}
+      #rh-pin-popover .rh-pp-footer{display:flex;gap:6px;align-items:center;border-top:1px solid rgba(255,255,255,.06);padding-top:8px;margin-top:4px}
+      #rh-pin-popover .rh-pp-reply-btn{font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid rgba(99,102,241,.3);background:rgba(99,102,241,.08);color:#a5b4fc;cursor:pointer;font-family:inherit}
+      #rh-pin-popover .rh-pp-reply-btn:hover{background:rgba(99,102,241,.18)}
+      #rh-pin-popover .rh-pp-status{font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05);color:rgba(255,255,255,.7);cursor:pointer;font-family:inherit}
+      #rh-pin-popover .rh-pp-status:hover{background:rgba(255,255,255,.1)}
+      #rh-pin-popover .rh-pp-reply-form{margin-top:8px}
+      #rh-pin-popover .rh-pp-reply-form textarea{width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:7px;color:#fff;font-size:12px;padding:7px 9px;font-family:inherit;box-sizing:border-box;outline:none;resize:none;margin-bottom:6px}
+      #rh-pin-popover .rh-pp-reply-form textarea::placeholder{color:rgba(255,255,255,.25)}
+      #rh-pin-popover .rh-pp-reply-actions{display:flex;gap:6px}
+      #rh-pin-popover .rh-pp-cancel{flex:1;padding:6px;border-radius:7px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05);color:rgba(255,255,255,.7);font-size:12px;cursor:pointer;font-family:inherit}
+      #rh-pin-popover .rh-pp-send{flex:1;padding:6px;border-radius:7px;border:none;background:#6366f1;color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+      #rh-pin-popover .rh-pp-send:disabled{opacity:.5;cursor:not-allowed}
+
+      /* Pins */
       .rh-pin{position:absolute;width:28px;height:28px;border-radius:50% 50% 50% 0;background:#6366f1;border:2px solid #fff;transform:rotate(-45deg);cursor:pointer;pointer-events:all;box-shadow:0 2px 8px rgba(0,0,0,.3);z-index:2147483641;display:flex;align-items:center;justify-content:center}
       .rh-pin.resolved{background:#22c55e}
       .rh-pin span{transform:rotate(45deg);color:#fff;font-size:11px;font-weight:700;font-family:-apple-system,sans-serif}
+
+      /* Painel lateral */
       #rh-panel{position:fixed;top:0;right:0;width:300px;height:100vh;background:#18181b;border-left:1px solid rgba(255,255,255,.08);z-index:2147483645;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;box-shadow:-4px 0 24px rgba(0,0,0,.4);transform:translateX(100%);transition:transform .2s ease}
       #rh-panel.open{transform:translateX(0)}
       #rh-panel-header{padding:16px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:10px}
@@ -74,7 +116,7 @@
       .rh-reply-btn{font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid rgba(99,102,241,.3);background:rgba(99,102,241,.08);color:#a5b4fc;cursor:pointer;font-family:inherit}
       .rh-reply-btn:hover{background:rgba(99,102,241,.18);color:#c7d2fe}
       .rh-replies{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;gap:6px}
-      .rh-reply{background:rgba(255,255,255,.03);border-radius:8px;padding:8px 10px}
+      .rh-reply{background:rgba(255,255,255,.03);border-radius:8px;padding:8px 10px;position:relative}
       .rh-reply-author{color:rgba(255,255,255,.4);font-size:10px;margin:0 0 3px}
       .rh-reply-body{color:rgba(255,255,255,.75);font-size:12px;line-height:1.5;margin:0}
       .rh-reply-form{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)}
@@ -85,10 +127,11 @@
       .rh-reply-cancel{flex:1;padding:6px;border-radius:7px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);color:rgba(255,255,255,.8);font-size:12px;cursor:pointer;font-family:inherit}
       .rh-reply-send{flex:1;padding:6px;border-radius:7px;border:none;background:#6366f1;color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
       .rh-reply-send:disabled{opacity:.5;cursor:not-allowed}
-      .rh-delete-btn{font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);color:#f87171;cursor:pointer;font-family:inherit}
-      .rh-delete-btn:hover{background:rgba(239,68,68,.18);color:#fca5a5}
-      .rh-reply-delete{font-size:10px;padding:2px 6px;border-radius:5px;border:1px solid rgba(239,68,68,.2);background:none;color:rgba(239,68,68,.5);cursor:pointer;font-family:inherit;margin-left:auto;display:block}
-      .rh-reply-delete:hover{background:rgba(239,68,68,.12);color:#f87171}
+
+      /* Lixeira — estilo único para os dois contextos */
+      .rh-trash{display:inline-flex;align-items:center;justify-content:center;padding:4px;border-radius:6px;border:1px solid rgba(239,68,68,.25);background:rgba(239,68,68,.07);color:#f87171;cursor:pointer;line-height:0}
+      .rh-trash:hover{background:rgba(239,68,68,.18);color:#fca5a5;border-color:rgba(239,68,68,.4)}
+
       .rh-form-actions{display:flex;gap:8px;margin-top:8px}
       .rh-btn-cancel{flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);color:rgba(255,255,255,.8);font-size:13px;cursor:pointer;font-family:inherit}
       .rh-btn-save{flex:1;padding:8px;border-radius:8px;border:none;background:#6366f1;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
@@ -132,11 +175,12 @@
       const x = (e.pageX / document.documentElement.clientWidth) * 100
       const y = (e.pageY / document.documentElement.scrollHeight) * 100
       pendingPos = { x, y }
+      closePinPopover()
       showPopover(e.clientX, e.clientY)
     })
     document.body.appendChild(overlay)
 
-    // Panel
+    // Painel lateral
     const panel = document.createElement('div')
     panel.id = 'rh-panel'
     panel.innerHTML = `
@@ -148,10 +192,9 @@
       <div id="rh-handoff-content" style="display:none"></div>
     `
     document.body.appendChild(panel)
-
     document.getElementById('rh-panel-close').onclick = closePanel
 
-    // Popover (new comment)
+    // Popover novo comentário
     const popover = document.createElement('div')
     popover.id = 'rh-popover'
     popover.innerHTML = `
@@ -163,9 +206,23 @@
       </div>
     `
     document.body.appendChild(popover)
-
     document.getElementById('rh-cancel').onclick = cancelComment
     document.getElementById('rh-save').onclick = handleSave
+
+    // Mini-popover do pin
+    const pinPop = document.createElement('div')
+    pinPop.id = 'rh-pin-popover'
+    document.body.appendChild(pinPop)
+
+    // Fechar popovers ao clicar fora
+    document.addEventListener('click', (e) => {
+      const pp = document.getElementById('rh-pin-popover')
+      const np = document.getElementById('rh-popover')
+      if (pp && !pp.contains(e.target) && !e.target.closest('.rh-pin')) closePinPopover()
+      if (np && !np.contains(e.target) && np.style.display !== 'none') {
+        if (!e.target.closest('#rh-overlay')) cancelComment()
+      }
+    }, true)
 
     // Toolbar
     const toolbar = document.createElement('div')
@@ -182,6 +239,7 @@
     document.getElementById('rh-btn-comment').onclick = () => {
       mode = mode === 'comment' ? 'pointer' : 'comment'
       overlay.classList.toggle('active', mode === 'comment')
+      closePinPopover()
       updateToolbar()
       if (mode !== 'comment') cancelComment()
     }
@@ -195,9 +253,118 @@
     renderPinsList()
   }
 
+  // ── Mini-popover do pin ──────────────────────────────────────────────────
+
+  function openPinPopover(pin, pinIndex, anchorEl) {
+    pinPopoverPinId = pin.id
+    renderPinPopover(pin, pinIndex)
+
+    const pp = document.getElementById('rh-pin-popover')
+    pp.style.display = 'block'
+
+    // Posiciona ao lado do pin
+    const rect = anchorEl.getBoundingClientRect()
+    const pw = 240
+    let left = rect.right + window.scrollX + 10
+    if (rect.right + pw + 20 > window.innerWidth) left = rect.left + window.scrollX - pw - 10
+    let top = rect.top + window.scrollY - 8
+    pp.style.left = left + 'px'
+    pp.style.top = top + 'px'
+  }
+
+  function closePinPopover() {
+    pinPopoverPinId = null
+    const pp = document.getElementById('rh-pin-popover')
+    if (pp) pp.style.display = 'none'
+  }
+
+  function renderPinPopover(pin, pinIndex) {
+    const pp = document.getElementById('rh-pin-popover')
+    if (!pp) return
+    const pinReplies = replies[pin.id] || []
+    const isReplying = replyingTo === pin.id
+
+    const repliesHTML = pinReplies.length > 0 ? `
+      <div class="rh-pp-replies">
+        ${pinReplies.map(r => `
+          <div class="rh-pp-reply">
+            <p class="rh-pp-reply-author">${r.author_name}</p>
+            <p class="rh-pp-reply-body">${r.body}</p>
+          </div>
+        `).join('')}
+      </div>
+    ` : ''
+
+    const replyFormHTML = isReplying ? `
+      <div class="rh-pp-reply-form">
+        <textarea rows="2" placeholder="Sua resposta…" id="rh-pp-reply-body"></textarea>
+        <div class="rh-pp-reply-actions">
+          <button class="rh-pp-cancel" id="rh-pp-cancel-reply">Cancelar</button>
+          <button class="rh-pp-send" id="rh-pp-send-reply">Enviar</button>
+        </div>
+      </div>
+    ` : ''
+
+    pp.innerHTML = `
+      <p class="rh-pp-author">${pin.author_name || 'Anônimo'} · #${pinIndex + 1}</p>
+      <p class="rh-pp-body">${pin.body}</p>
+      ${repliesHTML}
+      ${replyFormHTML}
+      <div class="rh-pp-footer">
+        <button class="rh-pp-reply-btn" id="rh-pp-reply-toggle">↩ Responder</button>
+        <button class="rh-pp-status" id="rh-pp-status-btn">
+          ${pin.status === 'open' ? 'Marcar resolvido' : 'Reabrir'}
+        </button>
+      </div>
+    `
+
+    document.getElementById('rh-pp-reply-toggle').onclick = () => {
+      replyingTo = replyingTo === pin.id ? null : pin.id
+      renderPinPopover(pin, pinIndex)
+      if (replyingTo) setTimeout(() => document.getElementById('rh-pp-reply-body')?.focus(), 50)
+    }
+
+    document.getElementById('rh-pp-status-btn').onclick = async () => {
+      await toggleStatus(pin.id, pin.status)
+      const updated = pins.find(p => p.id === pin.id)
+      if (updated) renderPinPopover(updated, pinIndex)
+    }
+
+    if (isReplying) {
+      document.getElementById('rh-pp-cancel-reply').onclick = () => {
+        replyingTo = null
+        renderPinPopover(pin, pinIndex)
+      }
+      document.getElementById('rh-pp-send-reply').onclick = async () => {
+        const bodyEl = document.getElementById('rh-pp-reply-body')
+        const body = bodyEl?.value.trim()
+        if (!body) return
+        const sendBtn = document.getElementById('rh-pp-send-reply')
+        sendBtn.disabled = true
+        sendBtn.textContent = 'Enviando…'
+        const authorName = getSavedName() || 'Anônimo'
+        const data = await sbFetch('replies?select=*', {
+          method: 'POST',
+          prefer: 'return=representation',
+          body: JSON.stringify({ pin_id: pin.id, author_name: authorName, body }),
+        })
+        if (data?.[0]) {
+          if (!replies[pin.id]) replies[pin.id] = []
+          replies[pin.id].push(data[0])
+        }
+        replyingTo = null
+        renderPinPopover(pin, pinIndex)
+        renderPinsList()
+      }
+    }
+  }
+
+  // ── Painel e estado ──────────────────────────────────────────────────────
+
   function openPanel(which) {
     activePanel = which
     panelOpen = true
+    closePinPopover()
     document.getElementById('rh-panel').classList.add('open')
     document.getElementById('rh-panel-title').textContent = which === 'handoff' ? 'Handoff' : 'Comentários'
     document.getElementById('rh-pins-list').style.display = which === 'threads' ? 'flex' : 'none'
@@ -218,7 +385,8 @@
 
   function showPopover(clientX, clientY) {
     const pop = document.getElementById('rh-popover')
-    document.getElementById('rh-author-input').value = ''
+    const savedName = getSavedName()
+    document.getElementById('rh-author-input').value = savedName
     document.getElementById('rh-textarea').value = ''
     const pw = 260, ph = 160
     let left = clientX + window.scrollX + 16
@@ -228,7 +396,11 @@
     pop.style.left = left + 'px'
     pop.style.top = top + 'px'
     pop.style.display = 'block'
-    document.getElementById('rh-textarea').focus()
+    if (savedName) {
+      document.getElementById('rh-textarea').focus()
+    } else {
+      document.getElementById('rh-author-input').focus()
+    }
   }
 
   function cancelComment() {
@@ -246,6 +418,8 @@
     document.getElementById('rh-btn-handoff')?.classList.toggle('active', activePanel === 'handoff')
   }
 
+  // ── Renderização ─────────────────────────────────────────────────────────
+
   function renderPins() {
     document.querySelectorAll('.rh-pin').forEach(el => el.remove())
     pins.forEach((pin, i) => {
@@ -254,7 +428,12 @@
       el.style.left = `calc(${pin.x_percent / 100 * document.documentElement.clientWidth}px - 14px)`
       el.style.top = `calc(${pin.y_percent / 100 * document.documentElement.scrollHeight}px - 14px)`
       el.innerHTML = `<span>${i + 1}</span>`
-      el.onclick = (e) => { e.stopPropagation(); openPanel('threads') }
+      el.onclick = (e) => {
+        e.stopPropagation()
+        if (pinPopoverPinId === pin.id) { closePinPopover(); return }
+        cancelComment()
+        openPinPopover(pin, i, el)
+      }
       document.body.appendChild(el)
     })
   }
@@ -264,6 +443,7 @@
     if (!list) return
     const open = pins.filter(p => p.status === 'open').length
     document.getElementById('rh-btn-threads').textContent = `☰ Threads${pins.length > 0 ? ` (${open})` : ''}`
+
     if (pins.length === 0) {
       list.innerHTML = '<div id="rh-empty">Nenhum comentário ainda.<br>Ative o modo comentário e clique na tela.</div>'
       return
@@ -271,21 +451,22 @@
 
     list.innerHTML = pins.map((pin, i) => {
       const pinReplies = replies[pin.id] || []
+
       const repliesHTML = pinReplies.length > 0 ? `
         <div class="rh-replies">
           ${pinReplies.map(r => `
             <div class="rh-reply">
               <p class="rh-reply-author">${r.author_name}</p>
               <p class="rh-reply-body">${r.body}</p>
-              <button class="rh-reply-delete" data-reply-id="${r.id}" data-pin-id="${pin.id}" title="Deletar resposta"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+              <button class="rh-trash" data-reply-id="${r.id}" data-pin-id="${pin.id}" title="Deletar resposta" style="margin-top:6px">${trashIcon(11)}</button>
             </div>
           `).join('')}
         </div>
       ` : ''
 
       const replyFormHTML = replyingTo === pin.id ? `
-        <div class="rh-reply-form" id="rh-reply-form-${pin.id}">
-          <input type="text" placeholder="Seu nome (opcional)" id="rh-reply-author-${pin.id}" />
+        <div class="rh-reply-form">
+          <input type="text" placeholder="Seu nome (opcional)" id="rh-reply-author-${pin.id}" value="${getSavedName()}" />
           <textarea rows="2" placeholder="Sua resposta…" id="rh-reply-body-${pin.id}"></textarea>
           <div class="rh-reply-actions">
             <button class="rh-reply-cancel" data-pin="${pin.id}">Cancelar</button>
@@ -307,7 +488,7 @@
               ${pin.status === 'open' ? 'Marcar resolvido' : 'Reabrir'}
             </button>
             <button class="rh-reply-btn" data-pin="${pin.id}">↩ Responder</button>
-            <button class="rh-delete-btn" data-pin-id="${pin.id}" title="Deletar comentário"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+            <button class="rh-trash" data-pin-id="${pin.id}" title="Deletar comentário">${trashIcon(13)}</button>
             ${pinReplies.length > 0 ? `<span style="color:rgba(255,255,255,.3);font-size:11px;margin-left:auto">${pinReplies.length} resp.</span>` : ''}
           </div>
           ${repliesHTML}
@@ -319,160 +500,37 @@
     list.querySelectorAll('.rh-status-btn').forEach(btn => {
       btn.onclick = () => toggleStatus(btn.dataset.id, btn.dataset.status)
     })
-
     list.querySelectorAll('.rh-reply-btn').forEach(btn => {
       btn.onclick = () => {
         replyingTo = replyingTo === btn.dataset.pin ? null : btn.dataset.pin
         renderPinsList()
-        if (replyingTo) {
-          setTimeout(() => {
-            document.getElementById(`rh-reply-body-${replyingTo}`)?.focus()
-          }, 50)
-        }
+        if (replyingTo) setTimeout(() => document.getElementById(`rh-reply-body-${replyingTo}`)?.focus(), 50)
       }
     })
-
     list.querySelectorAll('.rh-reply-cancel').forEach(btn => {
       btn.onclick = () => { replyingTo = null; renderPinsList() }
     })
-
     list.querySelectorAll('.rh-reply-send').forEach(btn => {
       btn.onclick = () => sendReply(btn.dataset.pin)
     })
-
-    list.querySelectorAll('.rh-delete-btn').forEach(btn => {
-      btn.onclick = () => deletePin(btn.dataset.pinId)
+    // lixeiras — distingue pin vs reply pelo dataset
+    list.querySelectorAll('.rh-trash').forEach(btn => {
+      if (btn.dataset.replyId) {
+        btn.onclick = () => deleteReply(btn.dataset.replyId, btn.dataset.pinId)
+      } else {
+        btn.onclick = () => deletePin(btn.dataset.pinId)
+      }
     })
-
-    list.querySelectorAll('.rh-reply-delete').forEach(btn => {
-      btn.onclick = () => deleteReply(btn.dataset.replyId, btn.dataset.pinId)
-    })
   }
 
-  async function sendReply(pinId) {
-    const bodyEl = document.getElementById(`rh-reply-body-${pinId}`)
-    const authorEl = document.getElementById(`rh-reply-author-${pinId}`)
-    const body = bodyEl?.value.trim()
-    if (!body) return
-
-    const authorName = authorEl?.value.trim() || 'Anônimo'
-    const sendBtn = document.querySelector(`.rh-reply-send[data-pin="${pinId}"]`)
-    if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Enviando…' }
-
-    const data = await sbFetch('replies?select=*', {
-      method: 'POST',
-      prefer: 'return=representation',
-      body: JSON.stringify({ pin_id: pinId, author_name: authorName, body }),
-    })
-
-    if (data?.[0]) {
-      if (!replies[pinId]) replies[pinId] = []
-      replies[pinId].push(data[0])
-    }
-
-    replyingTo = null
-    renderPinsList()
-  }
-
-  function renderHandoff() {
-    const container = document.getElementById('rh-handoff-content')
-    if (!container) return
-
-    if (!handoffData) {
-      container.innerHTML = `
-        <p style="color:rgba(255,255,255,.4);font-size:13px;line-height:1.5;margin:0 0 12px">
-          Analisa cores, tipografia, espaçamento e componentes deste protótipo.
-        </p>
-        <button class="rh-generate-btn" id="rh-gen-btn" ${handoffLoading ? 'disabled' : ''}>
-          ${handoffLoading ? '✨ Analisando…' : '✨ Gerar Handoff'}
-        </button>
-        ${handoffLoading ? '<p style="color:rgba(255,255,255,.25);font-size:11px;text-align:center;margin-top:8px">Isso pode levar 20–40 segundos…</p>' : ''}
-        ${handoffHistory.length > 0 ? `
-          <p class="rh-handoff-label" style="margin-top:16px">Histórico</p>
-          ${handoffHistory.map((h, i) => `
-            <button style="width:100%;text-align:left;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.03);color:rgba(255,255,255,.4);font-size:12px;cursor:pointer;font-family:inherit;margin-bottom:4px" data-idx="${i}" class="rh-hist-btn">
-              ${i === 0 ? '● ' : '○ '}${new Date(h.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-            </button>
-          `).join('')}
-        ` : ''}
-      `
-      document.getElementById('rh-gen-btn')?.addEventListener('click', generateHandoff)
-      container.querySelectorAll('.rh-hist-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          handoffData = handoffHistory[+btn.dataset.idx].data
-          renderHandoff()
-        })
-      })
-      return
-    }
-
-    const d = handoffData
-    container.innerHTML = `
-      <div class="rh-summary-box"><p class="rh-summary-text">${d.summary || ''}</p></div>
-
-      ${d.colors?.length ? `
-        <div class="rh-handoff-section">
-          <p class="rh-handoff-label">🎨 Cores</p>
-          ${d.colors.map(c => `
-            <div class="rh-color-chip" onclick="navigator.clipboard.writeText('${c.hex}')">
-              <div class="rh-color-dot" style="background:${c.hex}"></div>
-              <div><div class="rh-color-name">${c.name}</div><div class="rh-color-hex">${c.hex}</div></div>
-            </div>
-          `).join('')}
-        </div>
-      ` : ''}
-
-      ${d.typography?.length ? `
-        <div class="rh-handoff-section">
-          <p class="rh-handoff-label">✏️ Tipografia</p>
-          ${d.typography.map(t => `
-            <div class="rh-type-row">
-              <div class="rh-type-name">${t.name}</div>
-              <div class="rh-type-detail">${t.fontFamily} · ${t.sizes?.join(', ')}</div>
-            </div>
-          `).join('')}
-        </div>
-      ` : ''}
-
-      ${d.components?.length ? `
-        <div class="rh-handoff-section">
-          <p class="rh-handoff-label">🧩 Componentes</p>
-          <div>${d.components.map(c => `<span class="rh-comp-chip">${c.name}</span>`).join('')}</div>
-        </div>
-      ` : ''}
-
-      <button class="rh-regenerate-btn" id="rh-regen-btn">↺ Gerar novamente</button>
-    `
-    document.getElementById('rh-regen-btn').onclick = () => { handoffData = null; renderHandoff() }
-  }
-
-  async function generateHandoff() {
-    if (!reviewId) return
-    handoffLoading = true
-    renderHandoff()
-    try {
-      const res = await fetch(`${API_BASE}/api/handoff`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vercelUrl: location.origin, reviewId }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      handoffData = data.handoff
-      if (data.id) handoffHistory.unshift({ id: data.id, created_at: data.created_at, data: data.handoff })
-    } catch (e) {
-      console.error('[review-handoff] handoff error:', e)
-    } finally {
-      handoffLoading = false
-      renderHandoff()
-    }
-  }
+  // ── Ações ────────────────────────────────────────────────────────────────
 
   async function handleSave() {
     if (!pendingPos || !reviewId) return
     const body = document.getElementById('rh-textarea').value.trim()
     if (!body) return
     const authorName = document.getElementById('rh-author-input').value.trim() || 'Anônimo'
+    saveName(authorName)
     const btn = document.getElementById('rh-save')
     btn.disabled = true
     btn.textContent = 'Salvando…'
@@ -501,12 +559,35 @@
     btn.textContent = 'Salvar'
   }
 
+  async function sendReply(pinId) {
+    const bodyEl = document.getElementById(`rh-reply-body-${pinId}`)
+    const authorEl = document.getElementById(`rh-reply-author-${pinId}`)
+    const body = bodyEl?.value.trim()
+    if (!body) return
+    const authorName = authorEl?.value.trim() || getSavedName() || 'Anônimo'
+    saveName(authorName)
+    const sendBtn = document.querySelector(`.rh-reply-send[data-pin="${pinId}"]`)
+    if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Enviando…' }
+    const data = await sbFetch('replies?select=*', {
+      method: 'POST',
+      prefer: 'return=representation',
+      body: JSON.stringify({ pin_id: pinId, author_name: authorName, body }),
+    })
+    if (data?.[0]) {
+      if (!replies[pinId]) replies[pinId] = []
+      replies[pinId].push(data[0])
+    }
+    replyingTo = null
+    renderPinsList()
+  }
+
   async function deletePin(pinId) {
     if (!confirm('Deletar este comentário e todas as respostas?')) return
     await sbFetch(`pins?id=eq.${pinId}`, { method: 'DELETE', prefer: 'return=minimal' })
     pins = pins.filter(p => p.id !== pinId)
     delete replies[pinId]
     if (replyingTo === pinId) replyingTo = null
+    if (pinPopoverPinId === pinId) closePinPopover()
     renderPins()
     renderPinsList()
   }
@@ -515,6 +596,12 @@
     await sbFetch(`replies?id=eq.${replyId}`, { method: 'DELETE', prefer: 'return=minimal' })
     if (replies[pinId]) replies[pinId] = replies[pinId].filter(r => r.id !== replyId)
     renderPinsList()
+    // Atualiza mini-popover se estiver aberto no mesmo pin
+    if (pinPopoverPinId === pinId) {
+      const pin = pins.find(p => p.id === pinId)
+      const idx = pins.indexOf(pin)
+      if (pin) renderPinPopover(pin, idx)
+    }
   }
 
   async function toggleStatus(pinId, current) {
@@ -530,6 +617,98 @@
     renderPinsList()
   }
 
+  // ── Handoff ──────────────────────────────────────────────────────────────
+
+  function renderHandoff() {
+    const container = document.getElementById('rh-handoff-content')
+    if (!container) return
+    if (!handoffData) {
+      container.innerHTML = `
+        <p style="color:rgba(255,255,255,.4);font-size:13px;line-height:1.5;margin:0 0 12px">
+          Analisa cores, tipografia, espaçamento e componentes deste protótipo.
+        </p>
+        <button class="rh-generate-btn" id="rh-gen-btn" ${handoffLoading ? 'disabled' : ''}>
+          ${handoffLoading ? '✨ Analisando…' : '✨ Gerar Handoff'}
+        </button>
+        ${handoffLoading ? '<p style="color:rgba(255,255,255,.25);font-size:11px;text-align:center;margin-top:8px">Isso pode levar 20–40 segundos…</p>' : ''}
+        ${handoffHistory.length > 0 ? `
+          <p class="rh-handoff-label" style="margin-top:16px">Histórico</p>
+          ${handoffHistory.map((h, i) => `
+            <button style="width:100%;text-align:left;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.03);color:rgba(255,255,255,.4);font-size:12px;cursor:pointer;font-family:inherit;margin-bottom:4px" data-idx="${i}" class="rh-hist-btn">
+              ${i === 0 ? '● ' : '○ '}${new Date(h.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+            </button>
+          `).join('')}
+        ` : ''}
+      `
+      document.getElementById('rh-gen-btn')?.addEventListener('click', generateHandoff)
+      container.querySelectorAll('.rh-hist-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          handoffData = handoffHistory[+btn.dataset.idx].data
+          renderHandoff()
+        })
+      })
+      return
+    }
+    const d = handoffData
+    container.innerHTML = `
+      <div class="rh-summary-box"><p class="rh-summary-text">${d.summary || ''}</p></div>
+      ${d.colors?.length ? `
+        <div class="rh-handoff-section">
+          <p class="rh-handoff-label">🎨 Cores</p>
+          ${d.colors.map(c => `
+            <div class="rh-color-chip" onclick="navigator.clipboard.writeText('${c.hex}')">
+              <div class="rh-color-dot" style="background:${c.hex}"></div>
+              <div><div class="rh-color-name">${c.name}</div><div class="rh-color-hex">${c.hex}</div></div>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+      ${d.typography?.length ? `
+        <div class="rh-handoff-section">
+          <p class="rh-handoff-label">✏️ Tipografia</p>
+          ${d.typography.map(t => `
+            <div class="rh-type-row">
+              <div class="rh-type-name">${t.name}</div>
+              <div class="rh-type-detail">${t.fontFamily} · ${t.sizes?.join(', ')}</div>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+      ${d.components?.length ? `
+        <div class="rh-handoff-section">
+          <p class="rh-handoff-label">🧩 Componentes</p>
+          <div>${d.components.map(c => `<span class="rh-comp-chip">${c.name}</span>`).join('')}</div>
+        </div>
+      ` : ''}
+      <button class="rh-regenerate-btn" id="rh-regen-btn">↺ Gerar novamente</button>
+    `
+    document.getElementById('rh-regen-btn').onclick = () => { handoffData = null; renderHandoff() }
+  }
+
+  async function generateHandoff() {
+    if (!reviewId) return
+    handoffLoading = true
+    renderHandoff()
+    try {
+      const res = await fetch(`${API_BASE}/api/handoff`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vercelUrl: location.origin, reviewId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      handoffData = data.handoff
+      if (data.id) handoffHistory.unshift({ id: data.id, created_at: data.created_at, data: data.handoff })
+    } catch (e) {
+      console.error('[review-handoff] handoff error:', e)
+    } finally {
+      handoffLoading = false
+      renderHandoff()
+    }
+  }
+
+  // ── Init ─────────────────────────────────────────────────────────────────
+
   async function init() {
     try {
       const url = (location.origin + location.pathname).replace(/\/+$/, '') || location.origin
@@ -541,8 +720,6 @@
       ])
 
       pins = pinsData ?? []
-
-      // Group replies by pin_id
       replies = {}
       pins.forEach(p => { replies[p.id] = [] })
 
