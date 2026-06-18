@@ -38,6 +38,9 @@
   let handoffData = null
   let handoffHistory = []
   let handoffLoading = false
+  let handoffActivePage = null // url da página selecionada no resultado
+  let handoffRepoUrl = ''
+  let handoffManualPages = [] // [{ path }]
   let replyingTo = null
   let replyingToReply = null  // { replyId, authorName } para @mention
   let pinPopoverPinId = null
@@ -668,18 +671,72 @@
 
   // ── Handoff ──────────────────────────────────────────────────────────────
 
+  function renderPageSection(page) {
+    return `
+      ${page.colors?.length ? `
+        <div class="rh-handoff-section">
+          <p class="rh-handoff-label">🎨 Cores</p>
+          ${page.colors.map(c => `
+            <div class="rh-color-chip" onclick="navigator.clipboard.writeText('${c.hex}')">
+              <div class="rh-color-dot" style="background:${c.hex}"></div>
+              <div><div class="rh-color-name">${c.name}</div><div class="rh-color-hex">${c.hex}</div></div>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+      ${page.typography?.length ? `
+        <div class="rh-handoff-section">
+          <p class="rh-handoff-label">✏️ Tipografia</p>
+          ${page.typography.map(t => `
+            <div class="rh-type-row">
+              <div class="rh-type-name">${t.name}</div>
+              <div class="rh-type-detail">${t.fontFamily} · ${t.fontSize}</div>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+      ${page.components?.length ? `
+        <div class="rh-handoff-section">
+          <p class="rh-handoff-label">🧩 Componentes</p>
+          <div>${page.components.map(c => `<span class="rh-comp-chip">${c.name}</span>`).join('')}</div>
+        </div>
+      ` : ''}
+    `
+  }
+
   function renderHandoff() {
     const container = document.getElementById('rh-handoff-content')
     if (!container) return
+
     if (!handoffData) {
+      const manualPagesHTML = handoffManualPages.map((p, i) => `
+        <div style="display:flex;gap:6px;margin-bottom:6px">
+          <input type="text" value="${p.path}" placeholder="/pagina" data-page-idx="${i}"
+            style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:7px;color:#fff;font-size:12px;padding:6px 9px;font-family:inherit;box-sizing:border-box;outline:none" class="rh-page-input" />
+          <button data-del-idx="${i}" style="padding:4px 8px;border-radius:6px;border:1px solid rgba(239,68,68,.25);background:rgba(239,68,68,.07);color:#f87171;cursor:pointer;font-size:11px" class="rh-del-page">${trashIcon(11)}</button>
+        </div>
+      `).join('')
+
       container.innerHTML = `
-        <p style="color:rgba(255,255,255,.4);font-size:13px;line-height:1.5;margin:0 0 12px">
-          Analisa cores, tipografia, espaçamento e componentes deste protótipo.
-        </p>
+        <div class="rh-handoff-section">
+          <p class="rh-handoff-label">Repositório (opcional)</p>
+          <input id="rh-repo-input" type="text" value="${handoffRepoUrl}" placeholder="https://github.com/user/repo"
+            style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:7px;color:#fff;font-size:12px;padding:7px 9px;font-family:inherit;box-sizing:border-box;outline:none;margin-bottom:4px" />
+        </div>
+        <div class="rh-handoff-section">
+          <p class="rh-handoff-label" style="display:flex;align-items:center;justify-content:space-between">
+            Páginas adicionais
+            <button id="rh-add-page" style="font-size:11px;padding:2px 8px;border-radius:5px;border:1px solid rgba(99,102,241,.3);background:rgba(99,102,241,.08);color:#a5b4fc;cursor:pointer;font-family:inherit">+ Adicionar</button>
+          </p>
+          <div id="rh-pages-list">${manualPagesHTML}</div>
+          <p style="color:rgba(255,255,255,.25);font-size:11px;margin:4px 0 0;line-height:1.5">
+            Deixe vazio para analisar só a URL atual.<br>Ou adicione rotas como /dashboard, /login…
+          </p>
+        </div>
         <button class="rh-generate-btn" id="rh-gen-btn" ${handoffLoading ? 'disabled' : ''}>
           ${handoffLoading ? '✨ Analisando…' : '✨ Gerar Handoff'}
         </button>
-        ${handoffLoading ? '<p style="color:rgba(255,255,255,.25);font-size:11px;text-align:center;margin-top:8px">Isso pode levar 20–40 segundos…</p>' : ''}
+        ${handoffLoading ? '<p style="color:rgba(255,255,255,.25);font-size:11px;text-align:center;margin-top:8px">Isso pode levar 30–60 segundos…</p>' : ''}
         ${handoffHistory.length > 0 ? `
           <p class="rh-handoff-label" style="margin-top:16px">Histórico</p>
           ${handoffHistory.map((h, i) => `
@@ -689,64 +746,90 @@
           `).join('')}
         ` : ''}
       `
+
+      document.getElementById('rh-repo-input').oninput = (e) => { handoffRepoUrl = e.target.value }
+      document.getElementById('rh-add-page').onclick = () => {
+        handoffManualPages.push({ path: '' })
+        renderHandoff()
+        setTimeout(() => {
+          const inputs = document.querySelectorAll('.rh-page-input')
+          inputs[inputs.length - 1]?.focus()
+        }, 50)
+      }
+      container.querySelectorAll('.rh-page-input').forEach(input => {
+        input.oninput = (e) => { handoffManualPages[+e.target.dataset.pageIdx].path = e.target.value }
+      })
+      container.querySelectorAll('.rh-del-page').forEach(btn => {
+        btn.onclick = () => { handoffManualPages.splice(+btn.dataset.delIdx, 1); renderHandoff() }
+      })
       document.getElementById('rh-gen-btn')?.addEventListener('click', generateHandoff)
       container.querySelectorAll('.rh-hist-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           handoffData = handoffHistory[+btn.dataset.idx].data
+          handoffActivePage = handoffData.pages?.[0]?.url ?? null
           renderHandoff()
         })
       })
       return
     }
+
+    // ── Resultado por página ──
     const d = handoffData
+    const pages = d.pages ?? []
+    const activePage = pages.find(p => p.url === handoffActivePage) ?? pages[0]
+
+    const tabsHTML = pages.length > 1 ? `
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px">
+        ${pages.map(p => `
+          <button class="rh-page-tab ${p.url === activePage?.url ? 'active' : ''}" data-url="${p.url}">
+            ${p.label}
+          </button>
+        `).join('')}
+      </div>
+    ` : ''
+
     container.innerHTML = `
+      <style>
+        .rh-page-tab{padding:4px 10px;border-radius:20px;border:1px solid rgba(255,255,255,.12);background:none;color:rgba(255,255,255,.4);font-size:11px;cursor:pointer;font-family:inherit;white-space:nowrap}
+        .rh-page-tab.active{background:rgba(99,102,241,.2);border-color:rgba(99,102,241,.4);color:#a5b4fc}
+      </style>
       <div class="rh-summary-box"><p class="rh-summary-text">${d.summary || ''}</p></div>
-      ${d.colors?.length ? `
-        <div class="rh-handoff-section">
-          <p class="rh-handoff-label">🎨 Cores</p>
-          ${d.colors.map(c => `
-            <div class="rh-color-chip" onclick="navigator.clipboard.writeText('${c.hex}')">
-              <div class="rh-color-dot" style="background:${c.hex}"></div>
-              <div><div class="rh-color-name">${c.name}</div><div class="rh-color-hex">${c.hex}</div></div>
-            </div>
-          `).join('')}
-        </div>
-      ` : ''}
-      ${d.typography?.length ? `
-        <div class="rh-handoff-section">
-          <p class="rh-handoff-label">✏️ Tipografia</p>
-          ${d.typography.map(t => `
-            <div class="rh-type-row">
-              <div class="rh-type-name">${t.name}</div>
-              <div class="rh-type-detail">${t.fontFamily} · ${t.sizes?.join(', ')}</div>
-            </div>
-          `).join('')}
-        </div>
-      ` : ''}
-      ${d.components?.length ? `
-        <div class="rh-handoff-section">
-          <p class="rh-handoff-label">🧩 Componentes</p>
-          <div>${d.components.map(c => `<span class="rh-comp-chip">${c.name}</span>`).join('')}</div>
-        </div>
-      ` : ''}
+      ${tabsHTML}
+      <div id="rh-page-content">
+        ${activePage ? renderPageSection(activePage) : ''}
+      </div>
       <button class="rh-regenerate-btn" id="rh-regen-btn">↺ Gerar novamente</button>
     `
-    document.getElementById('rh-regen-btn').onclick = () => { handoffData = null; renderHandoff() }
+
+    container.querySelectorAll('.rh-page-tab').forEach(btn => {
+      btn.onclick = () => {
+        handoffActivePage = btn.dataset.url
+        renderHandoff()
+      }
+    })
+    document.getElementById('rh-regen-btn').onclick = () => { handoffData = null; handoffActivePage = null; renderHandoff() }
   }
 
   async function generateHandoff() {
     if (!reviewId) return
+    handoffRepoUrl = document.getElementById('rh-repo-input')?.value.trim() ?? handoffRepoUrl
     handoffLoading = true
     renderHandoff()
     try {
       const res = await fetch(`${API_BASE}/api/handoff`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vercelUrl: location.origin, reviewId }),
+        body: JSON.stringify({
+          vercelUrl: location.origin,
+          reviewId,
+          repoUrl: handoffRepoUrl || undefined,
+          manualRoutes: handoffManualPages.filter(p => p.path.trim()),
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       handoffData = data.handoff
+      handoffActivePage = data.handoff.pages?.[0]?.url ?? null
       if (data.id) handoffHistory.unshift({ id: data.id, created_at: data.created_at, data: data.handoff })
     } catch (e) {
       console.error('[review-handoff] handoff error:', e)
