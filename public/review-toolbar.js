@@ -525,10 +525,10 @@
           </div>
           <p class="rh-body">${pin.body}</p>
           <div class="rh-card-actions">
+            <button class="rh-reply-btn" data-pin="${pin.id}">↩ Responder</button>
             <button class="rh-status-btn" data-id="${pin.id}" data-status="${pin.status}">
               ${pin.status === 'open' ? 'Marcar resolvido' : 'Reabrir'}
             </button>
-            <button class="rh-reply-btn" data-pin="${pin.id}">↩ Responder</button>
             <button class="rh-trash" data-pin-id="${pin.id}" title="Deletar comentário">${trashIcon(13)}</button>
           </div>
           ${repliesHTML}
