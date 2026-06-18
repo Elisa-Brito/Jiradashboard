@@ -740,9 +740,12 @@
         ${handoffHistory.length > 0 ? `
           <p class="rh-handoff-label" style="margin-top:16px">Histórico</p>
           ${handoffHistory.map((h, i) => `
-            <button style="width:100%;text-align:left;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.03);color:rgba(255,255,255,.4);font-size:12px;cursor:pointer;font-family:inherit;margin-bottom:4px" data-idx="${i}" class="rh-hist-btn">
-              ${i === 0 ? '● ' : '○ '}${new Date(h.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-            </button>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+              <button style="flex:1;text-align:left;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.03);color:rgba(255,255,255,.4);font-size:12px;cursor:pointer;font-family:inherit" data-idx="${i}" class="rh-hist-btn">
+                ${i === 0 ? '● ' : '○ '}${new Date(h.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+              </button>
+              <button class="rh-trash rh-hist-del" data-hist-id="${h.id}" data-hist-idx="${i}" title="Deletar">${trashIcon(11)}</button>
+            </div>
           `).join('')}
         ` : ''}
       `
@@ -767,6 +770,15 @@
         btn.addEventListener('click', () => {
           handoffData = handoffHistory[+btn.dataset.idx].data
           handoffActivePage = handoffData.pages?.[0]?.url ?? null
+          renderHandoff()
+        })
+      })
+      container.querySelectorAll('.rh-hist-del').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.dataset.histId
+          const idx = +btn.dataset.histIdx
+          await fetch(`${API_BASE}/api/handoff?id=${id}`, { method: 'DELETE' })
+          handoffHistory.splice(idx, 1)
           renderHandoff()
         })
       })
