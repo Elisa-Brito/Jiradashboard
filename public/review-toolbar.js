@@ -822,12 +822,60 @@
     document.getElementById('rh-regen-btn').onclick = () => { handoffData = null; handoffActivePage = null; renderHandoff() }
   }
 
+  function discoverInternalRoutes() {
+    const origin = location.origin
+    const seen = new Set([location.pathname])
+    document.querySelectorAll('a[href]').forEach(a => {
+      try {
+        const url = new URL(a.getAttribute('href'), origin)
+        if (url.origin === origin && !seen.has(url.pathname) &&
+            !url.pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|pdf|zip|woff|woff2|js|css|ts|json)$/i)) {
+          seen.add(url.pathname)
+        }
+      } catch { /* skip */ }
+    })
+    return [...seen]
+  }
+
+  function capturePageInIframe(path) {
+    return new Promise(resolve => {
+      const iframe = document.createElement('iframe')
+      iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1280px;height:900px;visibility:hidden;pointer-events:none;z-index:-1'
+      iframe.src = location.origin + path
+      document.body.appendChild(iframe)
+      const timeout = setTimeout(() => {
+        try { resolve({ path, html: iframe.contentDocument?.documentElement?.outerHTML ?? '' }) } catch { resolve({ path, html: '' }) }
+        iframe.remove()
+      }, 4000)
+      iframe.onload = () => {
+        clearTimeout(timeout)
+        setTimeout(() => {
+          try { resolve({ path, html: iframe.contentDocument?.documentElement?.outerHTML ?? '' }) } catch { resolve({ path, html: '' }) }
+          iframe.remove()
+        }, 800)
+      }
+    })
+  }
+
   async function generateHandoff() {
     if (!reviewId) return
     handoffRepoUrl = document.getElementById('rh-repo-input')?.value.trim() ?? handoffRepoUrl
     handoffLoading = true
     renderHandoff()
     try {
+      // Discover routes from links + manual pages
+      const discovered = discoverInternalRoutes()
+      const manual = handoffManualPages.filter(p => p.path.trim()).map(p => p.path.startsWith('/') ? p.path : '/' + p.path)
+      const allPaths = [...new Set([...discovered, ...manual])].slice(0, 10)
+
+      // Capture each page HTML via iframe
+      const captured = await Promise.all(allPaths.map(path => capturePageInIframe(path)))
+      const pages = captured.filter(p => p.html && p.html.length > 100).map(p => ({
+        path: p.path,
+        url: location.origin + p.path,
+        html: p.html,
+      }))
+
       const res = await fetch(`${API_BASE}/api/handoff`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -835,7 +883,7 @@
           vercelUrl: location.origin,
           reviewId,
           repoUrl: handoffRepoUrl || undefined,
-          manualRoutes: handoffManualPages.filter(p => p.path.trim()),
+          pages,
         }),
       })
       const data = await res.json()
