@@ -110,7 +110,7 @@
       #rh-pin-popover .rh-pp-send:disabled{opacity:.5;cursor:not-allowed}
 
       /* Pins */
-      .rh-pin{position:absolute;width:28px;height:28px;border-radius:50% 50% 50% 0;background:#6366f1;border:2px solid #fff;transform:rotate(-45deg);cursor:pointer;pointer-events:all;box-shadow:0 2px 8px rgba(0,0,0,.3);z-index:2147483641;display:flex;align-items:center;justify-content:center}
+      .rh-pin{position:fixed;width:28px;height:28px;border-radius:50% 50% 50% 0;background:#6366f1;border:2px solid #fff;transform:rotate(-45deg);cursor:pointer;pointer-events:all;box-shadow:0 2px 8px rgba(0,0,0,.3);z-index:2147483641;display:flex;align-items:center;justify-content:center}
       .rh-pin.resolved{background:#22c55e}
       .rh-pin span{transform:rotate(45deg);color:#fff;font-size:11px;font-weight:700;font-family:-apple-system,sans-serif}
 
@@ -528,20 +528,30 @@
     })
   }
 
+  function pinViewportPos(pin) {
+    const container = getPinContainer()
+    if (container === document.body) {
+      return {
+        x: pin.x_percent / 100 * document.documentElement.clientWidth,
+        y: pin.y_percent / 100 * document.documentElement.scrollHeight - window.scrollY,
+      }
+    }
+    const rect = container.getBoundingClientRect()
+    return {
+      x: pin.x_percent / 100 * container.scrollWidth - container.scrollLeft + rect.left,
+      y: pin.y_percent / 100 * container.scrollHeight - container.scrollTop + rect.top,
+    }
+  }
+
   function renderPins() {
     document.querySelectorAll('.rh-pin').forEach(el => el.remove())
-    const container = getPinContainer()
     visiblePins().forEach((pin) => {
       const globalIndex = pins.indexOf(pin)
       const el = document.createElement('div')
       el.className = 'rh-pin' + (pin.status === 'resolved' ? ' resolved' : '')
-      if (container === document.body) {
-        el.style.left = `calc(${pin.x_percent / 100 * document.documentElement.clientWidth}px - 14px)`
-        el.style.top = `calc(${pin.y_percent / 100 * document.documentElement.scrollHeight}px - 14px)`
-      } else {
-        el.style.left = `calc(${pin.x_percent / 100 * container.scrollWidth}px - 14px)`
-        el.style.top = `calc(${pin.y_percent / 100 * container.scrollHeight}px - 14px)`
-      }
+      const pos = pinViewportPos(pin)
+      el.style.left = `${pos.x - 14}px`
+      el.style.top = `${pos.y - 14}px`
       el.innerHTML = `<span>${globalIndex + 1}</span>`
       el.onclick = (e) => {
         e.stopPropagation()
@@ -549,7 +559,7 @@
         cancelComment()
         openPinPopover(pin, globalIndex, el)
       }
-      container.appendChild(el)
+      document.body.appendChild(el)
     })
   }
 
@@ -584,10 +594,19 @@
     const origReplace = history.replaceState.bind(history)
     history.replaceState = (...args) => { origReplace(...args); onPageChange() }
     window.addEventListener('popstate', onPageChange)
+    window.addEventListener('scroll', () => renderPins(), { passive: true })
 
     // DOM-based routing (Zustand, state-driven SPAs)
     const observer = new MutationObserver(onPageChange)
     observer.observe(document.body, { childList: true, subtree: true })
+
+    // Re-render pins on inner scroll container scroll
+    setTimeout(() => {
+      const container = getPinContainer()
+      if (container !== document.body) {
+        container.addEventListener('scroll', () => renderPins(), { passive: true })
+      }
+    }, 1000)
   }
 
   function renderPinsList() {
