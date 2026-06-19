@@ -594,19 +594,19 @@
     const origReplace = history.replaceState.bind(history)
     history.replaceState = (...args) => { origReplace(...args); onPageChange() }
     window.addEventListener('popstate', onPageChange)
-    window.addEventListener('scroll', () => renderPins(), { passive: true })
+    // Capture scroll from any element (including inner containers)
+    document.addEventListener('scroll', () => renderPins(), { passive: true, capture: true })
 
-    // DOM-based routing (Zustand, state-driven SPAs)
-    const observer = new MutationObserver(onPageChange)
-    observer.observe(document.body, { childList: true, subtree: true })
-
-    // Re-render pins on inner scroll container scroll
-    setTimeout(() => {
-      const container = getPinContainer()
-      if (container !== document.body) {
-        container.addEventListener('scroll', () => renderPins(), { passive: true })
-      }
-    }, 1000)
+    // DOM-based routing — watch only direct children of body, ignore rh-pin changes
+    const observer = new MutationObserver((mutations) => {
+      const relevant = mutations.some(m =>
+        [...m.addedNodes, ...m.removedNodes].some(n =>
+          n.nodeType === 1 && !n.classList?.contains('rh-pin')
+        )
+      )
+      if (relevant) onPageChange()
+    })
+    observer.observe(document.body, { childList: true, subtree: false })
   }
 
   function renderPinsList() {
