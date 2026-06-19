@@ -189,8 +189,16 @@
     overlay.id = 'rh-overlay'
     overlay.addEventListener('click', (e) => {
       if (mode !== 'comment') return
-      const x = (e.pageX / document.documentElement.clientWidth) * 100
-      const y = (e.pageY / document.documentElement.scrollHeight) * 100
+      const container = getPinContainer()
+      let x, y
+      if (container === document.body) {
+        x = (e.pageX / document.documentElement.clientWidth) * 100
+        y = (e.pageY / document.documentElement.scrollHeight) * 100
+      } else {
+        const rect = container.getBoundingClientRect()
+        x = ((e.clientX - rect.left + container.scrollLeft) / container.scrollWidth) * 100
+        y = ((e.clientY - rect.top + container.scrollTop) / container.scrollHeight) * 100
+      }
       pendingPos = { x, y }
       closePinPopover()
       showPopover(e.clientX, e.clientY)
@@ -460,34 +468,60 @@
   }
 
   function detectPageKey() {
-    // URL changed (normal routing)
     if (location.pathname && location.pathname !== '/') return location.pathname
-
-    // Try visible heading
     const heading = [...document.querySelectorAll('h1, h2, [data-page], [data-route]')]
       .find(el => {
         const r = el.getBoundingClientRect()
         return r.width > 0 && r.height > 0 && r.top < window.innerHeight
       })
     if (heading) return heading.textContent.trim().slice(0, 60)
-
-    // Fallback: document title
     return document.title.slice(0, 60) || '/'
   }
 
   let _currentPageKey = null
+  let _pinContainer = null
+
+  function getPinContainer() {
+    if (_pinContainer) return _pinContainer
+    let best = null, bestArea = 0
+    document.querySelectorAll('*').forEach(el => {
+      if (el === document.body || el === document.documentElement) return
+      const s = window.getComputedStyle(el)
+      if (/(auto|scroll)/.test(s.overflowY) && el.scrollHeight > el.clientHeight + 10) {
+        const area = el.clientWidth * el.clientHeight
+        if (area > bestArea) { bestArea = area; best = el }
+      }
+    })
+    _pinContainer = best || document.body
+    if (_pinContainer !== document.body) {
+      if (window.getComputedStyle(_pinContainer).position === 'static') {
+        _pinContainer.style.position = 'relative'
+      }
+    }
+    return _pinContainer
+  }
 
   function visiblePins() {
-    return pins.filter(p => !p.route_path || p.route_path === _currentPageKey)
+    const key = _currentPageKey
+    return pins.filter(p => {
+      if (!p.route_path || p.route_path === '/') return true
+      return p.route_path === key
+    })
   }
 
   function renderPins() {
     document.querySelectorAll('.rh-pin').forEach(el => el.remove())
+    const container = getPinContainer()
     visiblePins().forEach((pin, i) => {
       const el = document.createElement('div')
       el.className = 'rh-pin' + (pin.status === 'resolved' ? ' resolved' : '')
-      el.style.left = `calc(${pin.x_percent / 100 * document.documentElement.clientWidth}px - 14px)`
-      el.style.top = `calc(${pin.y_percent / 100 * document.documentElement.scrollHeight}px - 14px)`
+      if (container === document.body) {
+        el.style.left = `calc(${pin.x_percent / 100 * document.documentElement.clientWidth}px - 14px)`
+        el.style.top = `calc(${pin.y_percent / 100 * document.documentElement.scrollHeight}px - 14px)`
+      } else {
+        el.style.left = `calc(${pin.x_percent}% - 14px)`
+        el.style.top = `calc(${pin.y_percent}% - 14px)`
+      }
       el.innerHTML = `<span>${i + 1}</span>`
       el.onclick = (e) => {
         e.stopPropagation()
@@ -495,7 +529,7 @@
         cancelComment()
         openPinPopover(pin, i, el)
       }
-      document.body.appendChild(el)
+      container.appendChild(el)
     })
   }
 
