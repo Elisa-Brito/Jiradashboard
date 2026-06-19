@@ -597,16 +597,21 @@
     // Capture scroll from any element (including inner containers)
     document.addEventListener('scroll', () => renderPins(), { passive: true, capture: true })
 
-    // DOM-based routing — watch only direct children of body, ignore rh-pin changes
+    // DOM-based routing — watch subtree but ignore rh-pin mutations
+    let _observerDebounce = null
     const observer = new MutationObserver((mutations) => {
       const relevant = mutations.some(m =>
         [...m.addedNodes, ...m.removedNodes].some(n =>
-          n.nodeType === 1 && !n.classList?.contains('rh-pin')
+          n.nodeType === 1 &&
+          !(n.classList?.contains('rh-pin')) &&
+          !(n.id?.startsWith('rh-'))
         )
       )
-      if (relevant) onPageChange()
+      if (!relevant) return
+      clearTimeout(_observerDebounce)
+      _observerDebounce = setTimeout(onPageChange, 300)
     })
-    observer.observe(document.body, { childList: true, subtree: false })
+    observer.observe(document.body, { childList: true, subtree: true })
   }
 
   function renderPinsList() {
