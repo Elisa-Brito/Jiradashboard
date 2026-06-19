@@ -484,8 +484,8 @@
       if (text) return text
     }
 
-    // First visible h1 or h2 outside toolbar
-    const heading = [...document.querySelectorAll('h1, h2')]
+    // First visible h1 outside toolbar (h1 = page title, h2 = section)
+    const heading = [...document.querySelectorAll('h1')]
       .find(el => {
         if (isToolbarEl(el)) return false
         const r = el.getBoundingClientRect()
