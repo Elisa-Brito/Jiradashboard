@@ -459,8 +459,26 @@
     return location.pathname || '/'
   }
 
+  function detectPageKey() {
+    // URL changed (normal routing)
+    if (location.pathname && location.pathname !== '/') return location.pathname
+
+    // Try visible heading
+    const heading = [...document.querySelectorAll('h1, h2, [data-page], [data-route]')]
+      .find(el => {
+        const r = el.getBoundingClientRect()
+        return r.width > 0 && r.height > 0 && r.top < window.innerHeight
+      })
+    if (heading) return heading.textContent.trim().slice(0, 60)
+
+    // Fallback: document title
+    return document.title.slice(0, 60) || '/'
+  }
+
+  let _currentPageKey = null
+
   function visiblePins() {
-    return pins.filter(p => !p.route_path || p.route_path === currentPath())
+    return pins.filter(p => !p.route_path || p.route_path === _currentPageKey)
   }
 
   function renderPins() {
@@ -481,22 +499,30 @@
     })
   }
 
-  // Watch SPA route changes
+  // Watch SPA route changes (URL-based and DOM-based)
   function watchRouteChanges() {
-    let lastPath = currentPath()
-    const check = () => {
-      if (location.pathname !== lastPath) {
-        lastPath = location.pathname
+    _currentPageKey = detectPageKey()
+
+    const onPageChange = () => {
+      const newKey = detectPageKey()
+      if (newKey !== _currentPageKey) {
+        _currentPageKey = newKey
         closePinPopover()
         cancelComment()
         renderPins()
       }
     }
+
+    // URL-based routing
     const orig = history.pushState.bind(history)
-    history.pushState = (...args) => { orig(...args); check() }
+    history.pushState = (...args) => { orig(...args); setTimeout(onPageChange, 100) }
     const origReplace = history.replaceState.bind(history)
-    history.replaceState = (...args) => { origReplace(...args); check() }
-    window.addEventListener('popstate', check)
+    history.replaceState = (...args) => { origReplace(...args); setTimeout(onPageChange, 100) }
+    window.addEventListener('popstate', onPageChange)
+
+    // DOM-based routing (Zustand, state-driven SPAs)
+    const observer = new MutationObserver(() => setTimeout(onPageChange, 150))
+    observer.observe(document.body, { childList: true, subtree: true })
   }
 
   function renderPinsList() {
@@ -621,7 +647,7 @@
         body,
         author_name: authorName,
         status: 'open',
-        route_path: currentPath(),
+        route_path: _currentPageKey || detectPageKey(),
       }),
     })
     pins.push(data[0])
