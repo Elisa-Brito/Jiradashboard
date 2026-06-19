@@ -493,7 +493,8 @@
       })
     if (heading) return heading.textContent.trim().slice(0, 60)
 
-    return document.title.slice(0, 60) || 'Home'
+    // Return null when no heading found — caller keeps current key
+    return null
   }
 
   let _currentPageKey = null
@@ -570,7 +571,7 @@
 
   // Watch SPA route changes (URL-based and DOM-based)
   function watchRouteChanges() {
-    _currentPageKey = detectPageKey()
+    _currentPageKey = detectPageKey() || location.pathname || 'Home'
     setTimeout(captureCurrentPage, 500)
 
     let debounce = null
@@ -578,14 +579,14 @@
       clearTimeout(debounce)
       debounce = setTimeout(() => {
         const newKey = detectPageKey()
-        if (newKey !== _currentPageKey) {
+        if (newKey && newKey !== _currentPageKey) {
           _currentPageKey = newKey
           setTimeout(captureCurrentPage, 300)
           closePinPopover()
           cancelComment()
           renderPins()
         }
-      }, 200)
+      }, 400)
     }
 
     // URL-based routing
