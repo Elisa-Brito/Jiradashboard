@@ -467,22 +467,27 @@
     return location.pathname || '/'
   }
 
+  function isToolbarEl(el) {
+    return el.closest('#rh-panel, #rh-toolbar, #rh-popover, #rh-pin-popover, #rh-overlay')
+  }
+
   function detectPageKey() {
     if (location.pathname && location.pathname !== '/') return location.pathname
 
-    // Active nav/sidebar item
-    const activeNav = document.querySelector(
-      '[aria-current="page"], [class*="active"] a, nav [class*="active"], aside [class*="active"], ' +
+    // Active nav/sidebar item (outside toolbar)
+    const activeNav = [...document.querySelectorAll(
+      '[aria-current="page"], nav [class*="active"], aside [class*="active"], ' +
       '[class*="selected"], [class*="current"], [data-active="true"], [data-selected="true"]'
-    )
+    )].find(el => !isToolbarEl(el))
     if (activeNav) {
       const text = activeNav.textContent.trim().slice(0, 60)
       if (text) return text
     }
 
-    // First visible h1 or h2
+    // First visible h1 or h2 outside toolbar
     const heading = [...document.querySelectorAll('h1, h2')]
       .find(el => {
+        if (isToolbarEl(el)) return false
         const r = el.getBoundingClientRect()
         return r.width > 0 && r.height > 0 && r.top >= 0 && r.top < window.innerHeight
       })
