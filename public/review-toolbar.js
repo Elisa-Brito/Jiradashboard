@@ -82,14 +82,14 @@
       #rh-overlay.active{pointer-events:all;cursor:crosshair}
 
       /* Popover novo comentário */
-      #rh-popover{position:absolute;width:260px;background:#1c1c1f;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:none}
+      #rh-popover{position:fixed;width:260px;background:#1c1c1f;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:none}
       #rh-popover input,#rh-popover textarea{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;font-size:13px;padding:8px 10px;font-family:inherit;box-sizing:border-box;outline:none;margin-bottom:8px}
       #rh-popover textarea{resize:none}
       #rh-popover input::placeholder,#rh-popover textarea::placeholder{color:rgba(255,255,255,.3)}
       #rh-popover .rh-form-actions{display:flex;gap:8px;margin-top:4px}
 
       /* Mini-popover ao clicar no pin */
-      #rh-pin-popover{position:absolute;width:240px;background:#1c1c1f;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:none}
+      #rh-pin-popover{position:fixed;width:240px;background:#1c1c1f;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:none}
       #rh-pin-popover .rh-pp-author{color:rgba(255,255,255,.4);font-size:10px;margin:0 0 4px}
       #rh-pin-popover .rh-pp-body{color:rgba(255,255,255,.88);font-size:13px;line-height:1.5;margin:0 0 8px}
       #rh-pin-popover .rh-pp-replies{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;max-height:140px;overflow-y:auto}
@@ -294,9 +294,9 @@
     // Posiciona ao lado do pin
     const rect = anchorEl.getBoundingClientRect()
     const pw = 240
-    let left = rect.right + window.scrollX + 10
-    if (rect.right + pw + 20 > window.innerWidth) left = rect.left + window.scrollX - pw - 10
-    let top = rect.top + window.scrollY - 8
+    let left = rect.right + 10
+    if (rect.right + pw + 20 > window.innerWidth) left = rect.left - pw - 10
+    let top = Math.min(rect.top - 8, window.innerHeight - 300)
     pp.style.left = left + 'px'
     pp.style.top = top + 'px'
   }
@@ -432,10 +432,10 @@
     }
     document.getElementById('rh-textarea').value = ''
     const pw = 260, ph = 160
-    let left = clientX + window.scrollX + 16
-    let top = clientY + window.scrollY + 16
-    if (clientX + pw + 20 > window.innerWidth) left = clientX + window.scrollX - pw - 8
-    if (clientY + ph + 20 > window.innerHeight) top = clientY + window.scrollY - ph - 8
+    let left = clientX + 16
+    let top = clientY + 16
+    if (clientX + pw + 20 > window.innerWidth) left = clientX - pw - 8
+    if (clientY + ph + 20 > window.innerHeight) top = clientY - ph - 8
     pop.style.left = left + 'px'
     pop.style.top = top + 'px'
     pop.style.display = 'block'
