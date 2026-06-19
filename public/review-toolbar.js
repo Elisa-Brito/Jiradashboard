@@ -526,7 +526,8 @@
   function renderPins() {
     document.querySelectorAll('.rh-pin').forEach(el => el.remove())
     const container = getPinContainer()
-    visiblePins().forEach((pin, i) => {
+    visiblePins().forEach((pin) => {
+      const globalIndex = pins.indexOf(pin)
       const el = document.createElement('div')
       el.className = 'rh-pin' + (pin.status === 'resolved' ? ' resolved' : '')
       if (container === document.body) {
@@ -536,12 +537,12 @@
         el.style.left = `calc(${pin.x_percent / 100 * container.scrollWidth}px - 14px)`
         el.style.top = `calc(${pin.y_percent / 100 * container.scrollHeight}px - 14px)`
       }
-      el.innerHTML = `<span>${i + 1}</span>`
+      el.innerHTML = `<span>${globalIndex + 1}</span>`
       el.onclick = (e) => {
         e.stopPropagation()
         if (pinPopoverPinId === pin.id) { closePinPopover(); return }
         cancelComment()
-        openPinPopover(pin, i, el)
+        openPinPopover(pin, globalIndex, el)
       }
       container.appendChild(el)
     })
