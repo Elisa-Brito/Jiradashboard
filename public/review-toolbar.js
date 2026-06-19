@@ -480,6 +480,7 @@
 
   let _currentPageKey = null
   let _pinContainer = null
+  let _capturedPages = {} // { pageKey: html }
 
   function getPinContainer() {
     if (_pinContainer) return _pinContainer
@@ -519,8 +520,8 @@
         el.style.left = `calc(${pin.x_percent / 100 * document.documentElement.clientWidth}px - 14px)`
         el.style.top = `calc(${pin.y_percent / 100 * document.documentElement.scrollHeight}px - 14px)`
       } else {
-        el.style.left = `calc(${pin.x_percent}% - 14px)`
-        el.style.top = `calc(${pin.y_percent}% - 14px)`
+        el.style.left = `calc(${pin.x_percent / 100 * container.scrollWidth}px - 14px)`
+        el.style.top = `calc(${pin.y_percent / 100 * container.scrollHeight}px - 14px)`
       }
       el.innerHTML = `<span>${i + 1}</span>`
       el.onclick = (e) => {
@@ -533,29 +534,40 @@
     })
   }
 
+  function captureCurrentPage() {
+    const key = _currentPageKey
+    if (key) _capturedPages[key] = document.documentElement.outerHTML
+  }
+
   // Watch SPA route changes (URL-based and DOM-based)
   function watchRouteChanges() {
     _currentPageKey = detectPageKey()
+    setTimeout(captureCurrentPage, 500)
 
+    let debounce = null
     const onPageChange = () => {
-      const newKey = detectPageKey()
-      if (newKey !== _currentPageKey) {
-        _currentPageKey = newKey
-        closePinPopover()
-        cancelComment()
-        renderPins()
-      }
+      clearTimeout(debounce)
+      debounce = setTimeout(() => {
+        const newKey = detectPageKey()
+        if (newKey !== _currentPageKey) {
+          _currentPageKey = newKey
+          setTimeout(captureCurrentPage, 300)
+          closePinPopover()
+          cancelComment()
+          renderPins()
+        }
+      }, 200)
     }
 
     // URL-based routing
     const orig = history.pushState.bind(history)
-    history.pushState = (...args) => { orig(...args); setTimeout(onPageChange, 100) }
+    history.pushState = (...args) => { orig(...args); onPageChange() }
     const origReplace = history.replaceState.bind(history)
-    history.replaceState = (...args) => { origReplace(...args); setTimeout(onPageChange, 100) }
+    history.replaceState = (...args) => { origReplace(...args); onPageChange() }
     window.addEventListener('popstate', onPageChange)
 
     // DOM-based routing (Zustand, state-driven SPAs)
-    const observer = new MutationObserver(() => setTimeout(onPageChange, 150))
+    const observer = new MutationObserver(onPageChange)
     observer.observe(document.body, { childList: true, subtree: true })
   }
 
@@ -909,58 +921,20 @@
     document.getElementById('rh-regen-btn').onclick = () => { handoffData = null; handoffActivePage = null; renderHandoff() }
   }
 
-  function discoverInternalRoutes() {
-    const origin = location.origin
-    const seen = new Set([location.pathname])
-    document.querySelectorAll('a[href]').forEach(a => {
-      try {
-        const url = new URL(a.getAttribute('href'), origin)
-        if (url.origin === origin && !seen.has(url.pathname) &&
-            !url.pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|pdf|zip|woff|woff2|js|css|ts|json)$/i)) {
-          seen.add(url.pathname)
-        }
-      } catch { /* skip */ }
-    })
-    return [...seen]
-  }
-
-  function capturePageInIframe(path) {
-    return new Promise(resolve => {
-      const iframe = document.createElement('iframe')
-      iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1280px;height:900px;visibility:hidden;pointer-events:none;z-index:-1'
-      iframe.src = location.origin + path
-      document.body.appendChild(iframe)
-      const timeout = setTimeout(() => {
-        try { resolve({ path, html: iframe.contentDocument?.documentElement?.outerHTML ?? '' }) } catch { resolve({ path, html: '' }) }
-        iframe.remove()
-      }, 4000)
-      iframe.onload = () => {
-        clearTimeout(timeout)
-        setTimeout(() => {
-          try { resolve({ path, html: iframe.contentDocument?.documentElement?.outerHTML ?? '' }) } catch { resolve({ path, html: '' }) }
-          iframe.remove()
-        }, 800)
-      }
-    })
-  }
-
   async function generateHandoff() {
     if (!reviewId) return
     handoffRepoUrl = document.getElementById('rh-repo-input')?.value.trim() ?? handoffRepoUrl
     handoffLoading = true
     renderHandoff()
     try {
-      // Discover routes from links + manual pages
-      const discovered = discoverInternalRoutes()
-      const manual = handoffManualPages.filter(p => p.path.trim()).map(p => p.path.startsWith('/') ? p.path : '/' + p.path)
-      const allPaths = [...new Set([...discovered, ...manual])].slice(0, 10)
+      // Capture current page if not already captured
+      captureCurrentPage()
 
-      // Capture each page HTML via iframe
-      const captured = await Promise.all(allPaths.map(path => capturePageInIframe(path)))
-      const pages = captured.filter(p => p.html && p.html.length > 100).map(p => ({
-        path: p.path,
-        url: location.origin + p.path,
-        html: p.html,
+      // Use captured snapshots from navigation
+      const pages = Object.entries(_capturedPages).map(([label, html]) => ({
+        url: location.origin + (location.pathname !== '/' ? location.pathname : '') + '#' + label,
+        label,
+        html,
       }))
 
       const res = await fetch(`${API_BASE}/api/handoff`, {
