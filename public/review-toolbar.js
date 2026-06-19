@@ -455,9 +455,17 @@
 
   // ── Renderização ─────────────────────────────────────────────────────────
 
+  function currentPath() {
+    return location.pathname || '/'
+  }
+
+  function visiblePins() {
+    return pins.filter(p => !p.route_path || p.route_path === currentPath())
+  }
+
   function renderPins() {
     document.querySelectorAll('.rh-pin').forEach(el => el.remove())
-    pins.forEach((pin, i) => {
+    visiblePins().forEach((pin, i) => {
       const el = document.createElement('div')
       el.className = 'rh-pin' + (pin.status === 'resolved' ? ' resolved' : '')
       el.style.left = `calc(${pin.x_percent / 100 * document.documentElement.clientWidth}px - 14px)`
@@ -471,6 +479,24 @@
       }
       document.body.appendChild(el)
     })
+  }
+
+  // Watch SPA route changes
+  function watchRouteChanges() {
+    let lastPath = currentPath()
+    const check = () => {
+      if (location.pathname !== lastPath) {
+        lastPath = location.pathname
+        closePinPopover()
+        cancelComment()
+        renderPins()
+      }
+    }
+    const orig = history.pushState.bind(history)
+    history.pushState = (...args) => { orig(...args); check() }
+    const origReplace = history.replaceState.bind(history)
+    history.replaceState = (...args) => { origReplace(...args); check() }
+    window.addEventListener('popstate', check)
   }
 
   function renderPinsList() {
@@ -595,6 +621,7 @@
         body,
         author_name: authorName,
         status: 'open',
+        route_path: currentPath(),
       }),
     })
     pins.push(data[0])
@@ -934,6 +961,7 @@
       if (handoffHistory.length > 0) handoffData = handoffHistory[0].data
 
       buildUI()
+      watchRouteChanges()
       renderPins()
     } catch (e) {
       console.error('[review-handoff]', e)
